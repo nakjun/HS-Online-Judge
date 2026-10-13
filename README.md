@@ -8,6 +8,8 @@ Python 코드 직접 실행과 예제 문제 채점을 지원하는 작은 웹�
 
 처음 Docker Desktop을 설치한 경우 초기 설정이나 WSL 2 설치, Windows 재시작이 필요할 수 있습니다. 이 단계가 요청되면 완료한 뒤 `install.cmd`를 다시 실행하세요. 같은 LAN의 다른 기기에서 접속이 안 되면 Windows 개인 네트워크 방화벽에서 TCP 8000번 포트를 로컬 서브넷에 허용해야 합니다. 서버 출력과 오류는 `runtime/`에 저장됩니다.
 
+Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Desktop 창을 열어 초기 설정을 마친 뒤 다시 실행하세요. 설치 스크립트가 Docker Desktop 창을 표시하고 엔진을 기다리도록 되어 있습니다. 계속 실패하면 설치 창에 표시된 전체 오류 문구와 Docker Desktop 설치 여부를 확인해야 합니다.
+
 수동 실행은 Docker Desktop Linux 엔진을 켠 뒤 `python -m pip install -r requirements.txt`, `docker pull python:3.13-alpine`, `python server.py` 순서로 진행합니다. 기본 주소는 <http://127.0.0.1:8000>입니다.
 
 ## 관리자 화면

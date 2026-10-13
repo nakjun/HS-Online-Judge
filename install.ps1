@@ -41,8 +41,10 @@ function Find-Docker {
 
 function Test-DockerCommand([string[]]$arguments) {
     $ErrorActionPreference = 'Continue'
-    & $script:docker @arguments 2>$null | Out-Null
-    return $LASTEXITCODE -eq 0
+    $output = & $script:docker @arguments 2>&1
+    $succeeded = $LASTEXITCODE -eq 0
+    if (-not $succeeded) { $script:lastDockerError = ($output | Out-String).Trim() }
+    return $succeeded
 }
 
 function Install-Package($id) {
@@ -75,10 +77,8 @@ try {
 
     Write-Host '[3/4] Docker 확인'
     $docker = Find-Docker
-    $dockerInstalledNow = $false
     if (-not $docker) {
         Install-Package 'Docker.DockerDesktop'
-        $dockerInstalledNow = $true
         $docker = Find-Docker
         if (-not $docker) { throw 'Docker Desktop 설치 후 찾지 못했습니다. Windows를 다시 시작한 뒤 재실행하세요.' }
     }
@@ -89,18 +89,14 @@ try {
             (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')
         ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if (-not $desktop) { throw 'Docker Desktop 실행 파일을 찾지 못했습니다.' }
-        if ($dockerInstalledNow) {
-            Start-Process -FilePath $desktop | Out-Null
-        } else {
-            Start-Process -FilePath $desktop -WindowStyle Hidden | Out-Null
-        }
-        Write-Host 'Docker Linux 엔진을 기다리는 중...'
+        Start-Process -FilePath $desktop | Out-Null
+        Write-Host 'Docker Desktop 창에서 초기 설정이 나오면 완료하세요. Linux 엔진을 기다리는 중...'
         $ready = $false
         for ($attempt = 0; $attempt -lt 90; $attempt++) {
             Start-Sleep -Seconds 2
             if (Test-DockerCommand @('info','--format','{{.ServerVersion}}')) { $ready = $true; break }
         }
-        if (-not $ready) { throw 'Docker Linux 엔진이 시작되지 않았습니다. Docker Desktop 초기 설정과 WSL 2 설치 상태를 확인하세요.' }
+        if (-not $ready) { throw "Docker Linux 엔진이 시작되지 않았습니다. Docker Desktop 초기 설정과 WSL 2 설치 상태를 확인하세요. 마지막 Docker 오류: $script:lastDockerError" }
     }
     if (-not (Test-DockerCommand @('image','inspect','python:3.13-alpine'))) {
         & $docker pull 'python:3.13-alpine'
