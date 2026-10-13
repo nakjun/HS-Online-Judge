@@ -6,3 +6,5 @@ lan.log
 lan.err
 judge.db
 judge.db-journal
+.venv/
+runtime/

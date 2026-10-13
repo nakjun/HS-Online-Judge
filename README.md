@@ -2,13 +2,13 @@
 
 Python 코드 직접 실행과 예제 문제 채점을 지원하는 작은 웹앱입니다. 서버는 이 PC에서 돌아가고, 제출 코드는 Docker 컨테이너에서 실행됩니다.
 
-## 실행
+## 원클릭 설치 및 실행 (Windows)
 
-1. Docker Desktop을 설치하고 Linux 컨테이너 엔진을 켭니다.
-2. `python -m pip install -r requirements.txt`를 실행합니다.
-3. `docker pull python:3.13-alpine`을 실행합니다.
-4. 이 폴더에서 `python server.py`를 실행합니다.
-5. 브라우저에서 <http://127.0.0.1:8000>을 엽니다.
+저장소를 ZIP으로 내려받아 압축을 푼 뒤 **`install.cmd`를 더블클릭**합니다. 스크립트는 Python 3.10 이상과 Docker Desktop을 확인하고, 없으면 `winget`으로 설치합니다. 이어 `.venv`에 Python 패키지를 설치하고 채점용 Docker 이미지를 준비한 뒤 실제 코드 실행을 검사합니다. 성공하면 LAN 서버를 시작하고 브라우저를 엽니다. 같은 스크립트를 다시 실행해도 기존 서버가 있으면 그대로 사용합니다.
+
+처음 Docker Desktop을 설치한 경우 초기 설정이나 WSL 2 설치, Windows 재시작이 필요할 수 있습니다. 이 단계가 요청되면 완료한 뒤 `install.cmd`를 다시 실행하세요. 같은 LAN의 다른 기기에서 접속이 안 되면 Windows 개인 네트워크 방화벽에서 TCP 8000번 포트를 로컬 서브넷에 허용해야 합니다. 서버 출력과 오류는 `runtime/`에 저장됩니다.
+
+수동 실행은 Docker Desktop Linux 엔진을 켠 뒤 `python -m pip install -r requirements.txt`, `docker pull python:3.13-alpine`, `python server.py` 순서로 진행합니다. 기본 주소는 <http://127.0.0.1:8000>입니다.
 
 ## 관리자 화면
 
