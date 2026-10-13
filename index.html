@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Python Judge</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,sans-serif;color:#e9edf5;background:#10131a}*{box-sizing:border-box}
+    body{margin:0}.wrap{max-width:1100px;margin:auto;padding:32px 20px}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}
+    h1{margin:0;font-size:28px}h2{margin:0 0 12px;font-size:18px}p{line-height:1.6;color:#b9c3d3}.muted{color:#8c99ad}
+    .grid{display:grid;grid-template-columns:320px 1fr;gap:18px}.panel{background:#1a1f2a;border:1px solid #303a4b;border-radius:14px;padding:20px;margin-bottom:18px}
+    label{display:block;margin:15px 0 7px;color:#b9c3d3;font-size:14px}select,textarea,input{width:100%;border:1px solid #3d4960;background:#111620;color:#f1f5fa;border-radius:9px;padding:11px;font:inherit}
+    textarea{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;resize:vertical}#code{min-height:350px;line-height:1.5}#stdin{min-height:95px}
+    button{border:0;border-radius:9px;padding:11px 17px;font-weight:700;cursor:pointer;color:#fff;background:#40506a}button.primary{background:#546cf3}button:disabled{opacity:.55;cursor:wait}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}pre{white-space:pre-wrap;word-break:break-word;background:#111620;border-radius:9px;padding:13px;min-height:50px;overflow:auto}
+    .badge{display:inline-block;padding:5px 9px;border-radius:7px;background:#33425d;margin-bottom:8px}.good{background:#164d3a;color:#aaf2ce}.bad{background:#683239;color:#ffd0d3}
+    .problem-list{display:grid;gap:7px;margin:12px 0}.problem-list button{width:100%;text-align:left;background:#293346;border:1px solid #42516a;padding:10px 12px}.problem-list button.selected{background:#354aa6;border-color:#7285ff}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:20px 12px}}
+  </style>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body><div class="brand-strip"><div class="brand-strip-inner"><span>HANSHIN UNIVERSITY</span><span>CLASSROOM CODE JUDGE</span></div></div><div class="wrap">
+  <header><div><span class="eyebrow">HANSHIN UNIVERSITY · CLASSROOM</span><h1>Python Judge</h1><p class="muted">주차별 문제를 풀고 제출 결과를 확인하세요.</p></div><a href="/admin">관리자</a></header>
+  <section id="login-view" class="panel login-panel">
+    <span class="eyebrow">STUDENT SIGN IN</span><h2>학생 로그인</h2>
+    <p>엑셀 명단에 등록된 학번과 이름을 입력하세요.</p>
+    <label for="student-id">학번</label><input id="student-id" autocomplete="username" placeholder="학번">
+    <label for="student-name">이름</label><input id="student-name" autocomplete="name" placeholder="이름">
+    <label for="class-code">수업 코드</label><input id="class-code" type="password" autocomplete="off" placeholder="기본값 AS006">
+    <div class="actions"><button id="login" class="primary">로그인</button><button id="clear-student" class="secondary" type="button">저장된 정보 지우기</button></div>
+    <p id="login-error" class="login-error" role="alert"></p>
+    <p class="muted">학번과 이름은 이 브라우저에 유지됩니다. 공용 PC에서는 사용 후 로그아웃하고 정보를 지워 주세요.</p>
+  </section>
+  <div id="app-shell" hidden>
+  <div class="grid">
+    <aside>
+      <div class="panel"><h2>문제 <button id="refresh-problems" style="float:right;padding:6px 10px;font-size:12px">목록 새로고침</button></h2><label for="week">주차</label><select id="week"></select><label for="problem">문제 선택</label><select id="problem"></select><div id="problem-list" class="problem-list"></div><div id="description"></div></div>
+      <div class="panel"><h2>학습 현황</h2><p id="week-progress" class="muted">주차를 선택하세요.</p></div>
+    </aside>
+    <main>
+      <div class="panel student-banner"><div><span class="eyebrow">SIGNED IN</span><h2 id="student-label">학생</h2></div><button id="logout" class="secondary">로그아웃</button></div>
+      <div class="panel"><h2>Python 3 코드</h2><label for="code-file">.py 파일 선택</label><input id="code-file" type="file" accept=".py,text/x-python"><p class="muted">파일을 선택하면 아래 편집기에 코드가 표시됩니다.</p><textarea id="code" spellcheck="false">a, b = map(int, input().split())
+print(a + b)</textarea><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
+      <div class="panel"><h2>결과</h2><div id="status" class="badge">대기 중</div><div id="detail" class="muted"></div><label>표준 출력</label><pre id="stdout"></pre><label>오류 출력</label><pre id="stderr"></pre></div>
+    </main>
+  </div>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let problems = [];
+let weeks = [];
+let progressWeeks = [];
+const labels = {OK:'정상 종료',ACCEPTED:'정답',WRONG_ANSWER:'오답',RUNTIME_ERROR:'실행 오류',TIME_LIMIT:'시간 초과',OUTPUT_LIMIT:'출력 제한 초과',SYSTEM_ERROR:'서버 실행 환경 오류'};
+const entryLabels={FULL_PASTE:'전체 붙여넣기',PARTIAL_PASTE:'일부 붙여넣기',FILE_UPLOAD:'파일 업로드',TYPED:'직접 입력',UNKNOWN:'확인 불가'};
+const entryStats={largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:false};
+function notePaste(value){entryStats.pasted_chars+=value.length;entryStats.largest_paste_chars=Math.max(entryStats.largest_paste_chars,value.length)}
+function saveStudentIdentity(){localStorage.setItem('judge.studentId',$('student-id').value.trim());localStorage.setItem('judge.studentName',$('student-name').value.trim())}
+function loadStudentIdentity(){$('student-id').value=localStorage.getItem('judge.studentId')||'';$('student-name').value=localStorage.getItem('judge.studentName')||''}
+function renderProblem(){
+  const p=problems.find(item=>item.id===$('problem').value);
+  if(!p)return;
+  for(const button of $('problem-list').querySelectorAll('button'))button.classList.toggle('selected',button.dataset.id===p.id);
+  $('description').replaceChildren();
+  for(const [title,value] of [['설명',p.description],['입력',p.input],['출력',p.output],['예제 입력',p.samples[0].input],['예제 출력',p.samples[0].output]]){
+    const heading=document.createElement('label');heading.textContent=title;
+    const content=document.createElement(title.startsWith('예제')?'pre':'p');content.textContent=value;
+    $('description').append(heading,content);
+  }
+  $('stdin').value=p.samples[0].input;
+}
+function renderWeek(){
+  const selected=problems.filter(p=>(p.week_id||'week-1')===$('week').value);
+  const weekState=progressWeeks.find(w=>w.id===$('week').value);
+  const stateById=new Map((weekState?.problems||[]).map(p=>[p.id,p]));
+  $('problem').replaceChildren(...selected.map(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=(stateById.get(p.id)?.solved?'✓ ':'')+p.title;return option}));
+  $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem()};return button}));
+  $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
+  if(selected.length)renderProblem();else $('description').textContent='이 주차에는 아직 문제가 없습니다.';
+}
+async function loadProblems(){
+  const previousWeek=$('week').value,previousProblem=$('problem').value;
+  const [weekData,problemData,progressData]=await Promise.all([
+    fetch('/api/weeks',{cache:'no-store'}).then(r=>r.json()),
+    fetch('/api/problems',{cache:'no-store'}).then(r=>r.json()),
+    fetch('/api/student/progress',{cache:'no-store'}).then(r=>r.json())
+  ]);
+  if(!Array.isArray(weekData)||!Array.isArray(problemData)||!Array.isArray(progressData))throw Error('로그인이 필요합니다.');
+  weeks=weekData;problems=problemData;progressWeeks=progressData;
+  $('week').replaceChildren(...weeks.map(w=>{const option=document.createElement('option');const state=progressWeeks.find(item=>item.id===w.id);option.value=w.id;option.textContent=w.title+(state?' · '+state.problems.filter(p=>p.solved).length+'/'+state.problems.length:'');return option}));
+  if(weeks.some(w=>w.id===previousWeek))$('week').value=previousWeek;
+  renderWeek();
+  if(problems.some(p=>p.id===previousProblem && (p.week_id||'week-1')===$('week').value)){$('problem').value=previousProblem;renderProblem()}
+}
+async function execute(mode){
+  for(const id of ['run','submit'])$(id).disabled=true;
+  $('status').textContent='실행 중…';$('status').className='badge';$('detail').textContent='';$('stdout').textContent='';$('stderr').textContent='';
+  try{
+    const body={code:$('code').value};
+    if(mode==='run')body.stdin=$('stdin').value;
+    else {body.problem_id=$('problem').value;body.entry={...entryStats}}
+    const response=await fetch('/api/'+mode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const result=await response.json();
+    if(response.status===401){showLogin();$('login-error').textContent=result.error||'다시 로그인하세요.';return}
+    if(!response.ok)throw new Error(result.error||'요청 실패');
+    const verdict=result.verdict||result.status;
+    $('status').textContent=labels[verdict]||verdict;
+    $('status').className='badge '+(['OK','ACCEPTED'].includes(verdict)?'good':'bad');
+    $('detail').textContent=result.cases?`${result.passed} / ${result.total}개 테스트 통과 · 제출 #${result.submission_id} · 입력 방식: ${entryLabels[result.entry_method]||'확인 불가'}`:'';
+    $('stdout').textContent=result.stdout||'';$('stderr').textContent=result.stderr||'';
+    if(mode==='submit')await loadProblems();
+  }catch(error){$('status').textContent='요청 오류';$('status').className='badge bad';$('stderr').textContent=error.message}
+  finally{for(const id of ['run','submit'])$(id).disabled=false}
+}
+$('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=renderProblem;$('week').onchange=renderWeek;
+$('student-id').addEventListener('input',saveStudentIdentity);$('student-name').addEventListener('input',saveStudentIdentity);
+$('clear-student').onclick=()=>{localStorage.removeItem('judge.studentId');localStorage.removeItem('judge.studentName');$('student-id').value='';$('student-name').value=''};
+$('code').addEventListener('paste',event=>notePaste(event.clipboardData?.getData('text')||''));
+$('code').addEventListener('drop',event=>notePaste(event.dataTransfer?.getData('text')||''));
+$('code').addEventListener('beforeinput',event=>{if(['insertText','insertCompositionText'].includes(event.inputType))entryStats.typed_chars+=(event.data||'').length});
+$('code').addEventListener('keydown',event=>{
+  if(event.key!=='Tab'||event.ctrlKey||event.altKey||event.metaKey)return;
+  event.preventDefault();
+  const editor=event.currentTarget,start=editor.selectionStart,end=editor.selectionEnd;
+  const lineStart=editor.value.lastIndexOf('\n',start-1)+1;
+  if(start===end){
+    if(!event.shiftKey){editor.setRangeText('    ',start,end,'end');entryStats.typed_chars+=4;return}
+    const indent=(editor.value.slice(lineStart).match(/^ {1,4}|^\t/)||[''])[0];
+    if(indent){editor.setRangeText('',lineStart,lineStart+indent.length,'preserve');editor.setSelectionRange(Math.max(lineStart,start-indent.length),Math.max(lineStart,start-indent.length))}
+    return;
+  }
+  const last=end>start&&editor.value[end-1]==='\n'?end-1:end;
+  const nextNewline=editor.value.indexOf('\n',last);
+  const lineEnd=nextNewline<0?editor.value.length:nextNewline;
+  const lines=editor.value.slice(lineStart,lineEnd).split('\n');
+  const changed=lines.map(line=>event.shiftKey?line.replace(/^ {1,4}|^\t/,''):'    '+line).join('\n');
+  editor.setRangeText(changed,lineStart,lineEnd,'select');
+  if(!event.shiftKey)entryStats.typed_chars+=4*lines.length;
+});
+$('code-file').onchange=async()=>{const file=$('code-file').files[0];if(!file)return;if(!file.name.toLowerCase().endsWith('.py')||file.size>32000){$('stderr').textContent='.py 파일은 32KB 이하여야 합니다.';return}$('code').value=await file.text();Object.assign(entryStats,{largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:true})};
+$('refresh-problems').onclick=()=>loadProblems().catch(e=>{$('stderr').textContent=e.message});
+window.addEventListener('focus',()=>{if(!$('app-shell').hidden)loadProblems().catch(()=>{})});
+function showLogin(){$('login-view').hidden=false;$('app-shell').hidden=true}
+async function showApp(student){$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
+async function login(){
+  $('login').disabled=true;$('login-error').textContent='';
+  try{
+    const body={student_id:$('student-id').value.trim(),student_name:$('student-name').value.trim(),class_code:$('class-code').value.trim()};
+    const response=await fetch('/api/student/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const result=await response.json();if(!response.ok)throw Error(result.error||'로그인 실패');
+    saveStudentIdentity();await showApp(result);
+  }catch(error){$('login-error').textContent=error.message}finally{$('login').disabled=false}
+}
+$('login').onclick=login;
+for(const id of ['student-id','student-name','class-code'])$(id).onkeydown=event=>{if(event.key==='Enter')login()};
+$('logout').onclick=async()=>{await fetch('/api/student/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});showLogin()};
+async function bootstrap(){
+  loadStudentIdentity();
+  try{const response=await fetch('/api/student/me',{cache:'no-store'});if(!response.ok)throw Error();await showApp(await response.json())}
+  catch{showLogin()}
+}
+bootstrap();
+</script></body></html>

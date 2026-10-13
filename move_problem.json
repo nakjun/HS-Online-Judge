@@ -1,0 +1,17 @@
+{
+  "week_id": "week-1",
+  "title": "격자 이동 명령",
+  "description": "n×n 격자에서 (0, 0)부터 시작합니다. 명령 R/L/U/D는 각각 x 또는 y를 1만큼 이동합니다. 격자를 벗어나는 이동은 실패로 세고 좌표를 유지합니다. H는 (0, 0)으로 돌아가며 성공·실패 횟수에 포함하지 않습니다. 그 밖의 명령은 실패로 셉니다. 최종 좌표, 성공 횟수, 실패 횟수를 각각 한 줄에 출력하세요.",
+  "input": "첫 줄에 격자 크기 n과 명령 수 m이 공백으로 주어집니다. 다음 m줄에 명령이 하나씩 주어집니다.",
+  "output": "첫 줄에 최종 x y, 둘째 줄에 성공 횟수, 셋째 줄에 실패 횟수를 출력합니다.",
+  "samples": [
+    {"input": "3 7\nR\nR\nR\nU\nL\nH\nD\n", "output": "0 0\n4\n2\n"}
+  ],
+  "tests": [
+    {"input": "3 7\nR\nR\nR\nU\nL\nH\nD\n", "output": "0 0\n4\n2\n"},
+    {"input": "1 4\nR\nU\nH\nX\n", "output": "0 0\n0\n3\n"},
+    {"input": "2 8\nU\nR\nD\nL\nL\nD\nH\nR\n", "output": "1 0\n5\n2\n"},
+    {"input": "4 0\n", "output": "0 0\n0\n0\n"},
+    {"input": "3 5\nQ\nL\nU\nH\nR\n", "output": "1 0\n2\n2\n"}
+  ]
+}

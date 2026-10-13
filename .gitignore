@@ -1,0 +1,8 @@
+.admin-token
+.judge-token
+__pycache__/
+*.pyc
+lan.log
+lan.err
+judge.db
+judge.db-journal
