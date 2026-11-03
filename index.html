@@ -34,7 +34,7 @@
   <div id="app-shell" hidden>
   <div class="grid">
     <aside>
-      <div class="panel"><h2>문제 <button id="refresh-problems" style="float:right;padding:6px 10px;font-size:12px">목록 새로고침</button></h2><label for="week">주차</label><select id="week"></select><label for="problem">문제 선택</label><select id="problem"></select><div id="problem-list" class="problem-list"></div><div id="description"></div></div>
+      <div class="panel"><h2>문제 <button id="refresh-problems" style="float:right;padding:6px 10px;font-size:12px">목록 새로고침</button></h2><p id="problem-load-status" class="muted" role="status"></p><label for="week">주차</label><select id="week"></select><label for="problem">문제 선택</label><select id="problem"></select><div id="problem-list" class="problem-list"></div><div id="description"></div></div>
       <div class="panel"><h2>학습 현황</h2><p id="week-progress" class="muted">주차를 선택하세요.</p></div>
     </aside>
     <main>
@@ -176,22 +176,43 @@ function renderWeek(preferredProblem=$('problem').value){
   $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
   if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
 }
+async function problemData(path,label){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
+  try{
+    const response=await fetch(path,{cache:'no-store',signal:controller.signal});
+    if(!response.ok){const error=Error(label+' 조회 실패 (HTTP '+response.status+')');error.status=response.status;throw error}
+    const data=await response.json();
+    if(!Array.isArray(data))throw Error(label+' 응답 형식이 올바르지 않습니다.');
+    return data;
+  }finally{clearTimeout(timer)}
+}
 async function loadProblems(){
   const studentId=currentStudent,version=++loadVersion;
-  const [weekData,problemData,progressData,acceptedData]=await Promise.all([
-    fetch('/api/weeks',{cache:'no-store'}).then(r=>r.json()),
-    fetch('/api/problems',{cache:'no-store'}).then(r=>r.json()),
-    fetch('/api/student/progress',{cache:'no-store'}).then(r=>r.json()),
-    fetch('/api/student/accepted-codes',{cache:'no-store'}).then(r=>r.json())
+  $('problem-load-status').textContent='문제 목록을 불러오는 중…';
+  const results=await Promise.allSettled([
+    problemData('/api/weeks','주차'),problemData('/api/problems','문제 목록'),
+    problemData('/api/student/progress','학습 현황'),problemData('/api/student/accepted-codes','정답 코드')
   ]);
   if(currentStudent!==studentId||version!==loadVersion)return;
-  if(!Array.isArray(weekData)||!Array.isArray(problemData)||!Array.isArray(progressData)||!Array.isArray(acceptedData))throw Error('로그인이 필요합니다.');
-  for(const item of acceptedData)rememberAccepted(studentId,item.problem_id,item.code,item.submission_id);
+  const requiredError=results.slice(0,2).find(result=>result.status==='rejected')?.reason;
+  if(requiredError){
+    if(requiredError.status===401){showLogin();$('login-error').textContent='로그인이 만료되었습니다. 다시 로그인하세요.'}
+    else $('problem-load-status').textContent='문제 목록을 불러오지 못했습니다. '+requiredError.message+' · 목록 새로고침으로 다시 시도하세요.';
+    return;
+  }
+  const [weekData,problemList]=results.slice(0,2).map(result=>result.value);
+  const warnings=[];
+  if(results[2].status==='fulfilled')progressWeeks=results[2].value;
+  else warnings.push('학습 현황을 불러오지 못했습니다.');
+  if(results[3].status==='fulfilled'){
+    for(const item of results[3].value)rememberAccepted(studentId,item.problem_id,item.code,item.submission_id);
+  }else warnings.push('정답 코드 동기화에 실패했습니다. 서버 재시작 후 목록을 새로고침하세요.');
   const previousWeek=$('week').value,previousProblem=$('problem').value;
-  weeks=weekData;problems=problemData;progressWeeks=progressData;
+  weeks=weekData;problems=problemList;
   $('week').replaceChildren(...weeks.map(w=>{const option=document.createElement('option');const state=progressWeeks.find(item=>item.id===w.id);option.value=w.id;option.textContent=w.title+(state?' · '+state.problems.filter(p=>p.solved).length+'/'+state.problems.length:'');return option}));
   if(weeks.some(w=>w.id===previousWeek))$('week').value=previousWeek;
   renderWeek(previousProblem);
+  $('problem-load-status').textContent=warnings.join(' ')||(!weeks.length?'등록된 주차가 없습니다.':'');
 }
 async function execute(mode){
   saveDraft();
@@ -292,7 +313,7 @@ $('code-file').onchange=async()=>{
 $('refresh-problems').onclick=()=>loadProblems().catch(e=>{$('stderr').textContent=e.message});
 window.addEventListener('focus',()=>{if(!$('app-shell').hidden)loadProblems().catch(()=>{})});
 function showLogin(){saveDraft();stopAttention();currentStudent=null;activeProblem=null;loadVersion++;$('code').value='';$('login-view').hidden=false;$('app-shell').hidden=true}
-async function showApp(student){saveDraft();stopAttention();currentStudent=student.student_id;activeProblem=null;$('code').value='';$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
+async function showApp(student){saveDraft();stopAttention();currentStudent=student.student_id;activeProblem=null;progressWeeks=[];$('code').value='';$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
 async function login(){
   $('login').disabled=true;$('login-error').textContent='';
   try{

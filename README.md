@@ -12,6 +12,10 @@ Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Deskto
 
 수동 실행은 Docker Desktop Linux 엔진을 켠 뒤 `python -m pip install -r requirements.txt`, `docker pull python:3.13-alpine`, `python server.py` 순서로 진행합니다. 기본 주소는 <http://127.0.0.1:8000>입니다.
 
+설치 후 평소에는 **`run.cmd`를 더블클릭**하거나 `powershell -ExecutionPolicy Bypass -File .\run.ps1`로 실행합니다. 패키지를 다시 설치하지 않고 Docker 상태·채점 이미지를 확인한 뒤 LAN 서버를 실행합니다. 이미 실행 중이면 기존 서버를 사용합니다. `-NoBrowser`는 브라우저 자동 열기를 끄고, `-LocalOnly`는 이 PC에서만 접속하도록 새 서버를 시작하며, `-Port 8001`로 포트를 지정할 수 있습니다.
+
+`git pull` 후에는 **`run.cmd -Restart`**로 서버 코드를 다시 불러오고 브라우저를 새로고침하세요. 재시작은 이 프로젝트의 절대 경로로 실행된 Python 서버만 종료합니다. 예전 설치 스크립트로 실행한 서버는 경로를 확인할 수 없어 자동 종료하지 않으므로, 기존 서버를 실행한 창을 닫고 `run.cmd`로 다시 시작하세요. 서버 로그는 `runtime/server.out.log`, `runtime/server.err.log`에 저장됩니다. 새 정답 코드 조회 API가 없거나 일시적으로 실패해도 문제 목록은 표시하며, 목록 위에 동기화 오류를 안내합니다.
+
 ## 관리자 화면
 
 <http://127.0.0.1:8000/admin>에서 주차와 문제를 추가할 수 있습니다. 관리자 토큰은 `AS006`으로 고정되어 있습니다.
