@@ -70,6 +70,7 @@ class StudentFlowTest(unittest.TestCase):
                 connection.close()
                 status, result = request("/api/submit", body)
                 self.assertEqual((status, result["verdict"], result["passed"]), (200, "ACCEPTED", 3))
+                self.assertTrue(result["attention_saved"])
                 self.assertEqual(storage.list_submissions()[0]["student_id"], "00123")
                 self.assertEqual(storage.list_submissions()[0]["entry_method"], "FULL_PASTE")
                 self.assertEqual(storage.get_submission(result["submission_id"])["code"], body["code"])

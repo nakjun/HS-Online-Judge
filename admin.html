@@ -27,7 +27,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 <div class="panel"><h2>수업 코드 관리</h2><p id="class-code-status" class="note">관리자 인증 후 현재 상태를 확인할 수 있습니다.</p><div class="row"><div><label for="new-class-code">새 수업 코드</label><input id="new-class-code" type="password" autocomplete="new-password" placeholder="영문·숫자 4~32자"></div><div><label for="confirm-class-code">새 수업 코드 확인</label><input id="confirm-class-code" type="password" autocomplete="new-password" placeholder="같은 코드를 다시 입력"></div></div><button id="save-class-code">수업 코드 저장</button><p class="note">코드를 바꾸면 기존 학생은 로그아웃되며 새 코드로 다시 로그인해야 합니다.</p></div>
 <div class="panel"><h2>학생 명단 가져오기</h2><p class="note">.xlsx 첫 행에 <strong>학번</strong>과 <strong>이름</strong> 열이 필요합니다. 기존 학번은 이름을 갱신하며, 파일에 없는 학생은 유지됩니다. 앞자리 0이 있는 학번은 엑셀에서 텍스트로 저장하세요.</p><input id="roster-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><button id="import-roster">엑셀 가져오기</button><button id="refresh-data" class="secondary">목록 새로고침</button><h3>등록된 학생</h3><div class="scroll"><table><thead><tr><th>학번</th><th>이름</th></tr></thead><tbody id="student-rows"></tbody></table></div></div>
 <div class="panel"><h2>주차별 제출 현황</h2><p class="note">선택한 주차의 제출 횟수와 정답 문제 수를 확인합니다. 학번·이름·제출수·정답수 제목을 누르면 정렬 방향을 바꿀 수 있습니다.</p><div class="row"><div><label for="progress-week">조회 주차</label><select id="progress-week"></select></div><div><label for="progress-query">학번 또는 이름 검색</label><input id="progress-query" placeholder="검색어"><button id="progress-search">검색</button></div></div><div class="scroll"><table><thead><tr id="progress-head"></tr></thead><tbody id="progress-rows"></tbody></table></div><div class="row"><div id="progress-count" class="note"></div><div style="text-align:right"><button id="progress-prev" class="secondary">이전</button> <button id="progress-next" class="secondary">다음</button></div></div><div id="progress-detail" class="progress-detail">상세 보기에서 문제별 상태를 확인하세요.</div></div>
-<div class="panel"><h2>최근 제출</h2><p class="note">입력 방식과 화면 이탈은 브라우저에서 관찰한 참고 기록입니다. 다른 탭의 주소·내용은 수집하지 않으며 LLM 사용 여부를 증명하지 않습니다. 화면 이탈 시간은 탭 숨김과 포커스 이탈이 겹친 시간을 한 번만 계산합니다.</p><div class="scroll"><table><thead><tr><th>번호</th><th>학번</th><th>이름</th><th>문제</th><th>결과</th><th>입력 방식</th><th>화면 이탈</th><th>시간</th><th>상세</th></tr></thead><tbody id="submission-rows"></tbody></table></div><div id="submission-activity" class="progress-detail" hidden></div><pre id="submission-code" style="white-space:pre-wrap;overflow:auto"></pre></div>
+<div class="panel"><h2>최근 제출</h2><button id="refresh-submissions" class="secondary">제출 목록 새로고침</button><p class="note">이 화면을 보고 있는 동안 10초마다 새 제출을 확인합니다.</p><p class="note">입력 방식과 화면 이탈은 브라우저에서 관찰한 참고 기록입니다. 다른 탭의 주소·내용은 수집하지 않으며 LLM 사용 여부를 증명하지 않습니다. 화면 이탈 시간은 탭 숨김과 포커스 이탈이 겹친 시간을 한 번만 계산합니다.</p><div class="scroll"><table><thead><tr><th>번호</th><th>학번</th><th>이름</th><th>문제</th><th>결과</th><th>입력 방식</th><th>화면 이탈</th><th>시간</th><th>상세</th></tr></thead><tbody id="submission-rows"></tbody></table></div><div id="submission-activity" class="progress-detail" hidden></div><pre id="submission-code" style="white-space:pre-wrap;overflow:auto"></pre></div>
 <div class="panel"><h2>주차 추가</h2><label for="week-title">주차 이름</label><input id="week-title" placeholder="예: 2주차"><button id="add-week">주차 추가</button></div>
 <div class="panel"><h2>문제 추가</h2><div class="row"><div><label for="week">주차</label><select id="week"></select></div><div><label for="title">문제 제목</label><input id="title" placeholder="예: 세 수의 합"></div></div>
 <label for="description">문제 설명</label><textarea id="description"></textarea>
@@ -47,6 +47,7 @@ function activateTab(tab){
   pages.forEach((page,index)=>page.hidden=index!==tabs.indexOf(tab)+1);
   for(const button of document.querySelectorAll('[data-tab]')){const active=button.dataset.tab===tab;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false')}
   history.replaceState(null,'','#'+tab);
+  if(tab==='submissions'&&adminToken)refreshSubmissions().catch(e=>message(e.message));
 }
 async function showAdmin(){
   await Promise.all([refreshWeeks(),refreshClassCode()]);
@@ -130,6 +131,14 @@ function fillSubmissions(items){
   }
 }
 function attentionSeconds(ms){return (ms/1000).toFixed(1)+'초'}
+let submissionsLoading=false;
+async function refreshSubmissions(){
+  if(submissionsLoading||!adminToken)return;
+  submissionsLoading=true;
+  const token=adminToken;
+  try{const items=await request('/api/admin/submissions');if(adminToken===token)fillSubmissions(items)}
+  finally{submissionsLoading=false}
+}
 function showAttention(submission){
   const box=$('submission-activity');box.hidden=false;box.replaceChildren();
   const heading=document.createElement('strong');heading.textContent='제출 #'+submission.id+' · '+submission.student_id+' '+submission.name+' · 화면 활동';box.append(heading);
@@ -160,6 +169,11 @@ $('save-class-code').onclick=async()=>{try{
   await refreshClassCode();message('수업 코드를 저장했습니다. 기존 학생은 새 코드로 다시 로그인해야 합니다.');
 }catch(e){message(e.message)}};
 $('refresh-data').onclick=async()=>{try{const count=await refreshData();message('학생 '+count+'명 조회 완료')}catch(e){message(e.message)}};
+$('refresh-submissions').onclick=()=>refreshSubmissions().catch(e=>message(e.message));
+function refreshVisibleSubmissions(){if(adminToken&&location.hash==='#submissions'&&!document.hidden)refreshSubmissions().catch(e=>message(e.message))}
+window.addEventListener('focus',refreshVisibleSubmissions);
+document.addEventListener('visibilitychange',refreshVisibleSubmissions);
+setInterval(refreshVisibleSubmissions,10000);
 $('progress-search').onclick=async()=>{try{progressOffset=0;await refreshProgress()}catch(e){message(e.message)}};
 $('progress-query').onkeydown=event=>{if(event.key==='Enter')$('progress-search').click()};
 $('progress-week').onchange=async()=>{progressOffset=0;try{await refreshProgress()}catch(e){message(e.message)}};

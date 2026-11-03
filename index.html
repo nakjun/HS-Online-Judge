@@ -41,7 +41,7 @@
       <div class="panel student-banner"><div><span class="eyebrow">SIGNED IN</span><h2 id="student-label">학생</h2></div><button id="logout" class="secondary">로그아웃</button></div>
       <div class="panel"><h2>Python 3 코드</h2><label for="code-file">.py 파일 선택</label><input id="code-file" type="file" accept=".py,text/x-python"><p class="muted">파일을 선택하면 아래 편집기에 코드가 표시됩니다.</p><textarea id="code" spellcheck="false">a, b = map(int, input().split())
 print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 또는 선택한 줄의 주석 전환. 코드는 학생·문제별로 이 브라우저에 자동 저장됩니다.</p><p id="code-save-status" class="muted" role="status"></p><button id="restore-accepted" class="secondary" disabled>정답 코드 복원</button><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
-      <p class="muted">문제를 열어 둔 동안의 탭 숨김·창 포커스 이탈 횟수와 시간이 제출 시 관리자에게 전달됩니다.</p>
+      <p class="muted">문제를 열어 둔 동안의 탭 숨김·창 포커스 이탈 횟수와 시간이 제출 시 관리자에게 전달됩니다.</p><p id="attention-status" class="muted" role="status"></p>
       <div class="panel"><h2>결과</h2><div id="status" class="badge">대기 중</div><div id="detail" class="muted"></div><label>표준 출력</label><pre id="stdout"></pre><label>오류 출력</label><pre id="stderr"></pre></div>
     </main>
   </div>
@@ -69,14 +69,15 @@ function attentionData(saved){
   }
   return data;
 }
-function updateAttention(){
+function updateAttention(event){
   if(!attentionState)return;
   const state=attentionState,data=state.data,now=performance.now(),elapsed=Math.max(0,now-state.last);
   if(state.hidden)data.hidden_ms+=elapsed;
   if(state.blurred)data.blur_ms+=elapsed;
   if(state.hidden||state.blurred)data.away_ms+=elapsed;
   state.last=now;
-  const hidden=document.visibilityState==='hidden',blurred=!document.hasFocus();
+  const hidden=document.visibilityState==='hidden';
+  const blurred=event?.type==='blur'?true:event?.type==='focus'?false:!document.hasFocus();
   const at=new Date().toISOString();
   for(const [changed,type] of [[state.hidden!==hidden,hidden?'hidden':'visible'],[state.blurred!==blurred,blurred?'blur':'focus']]){
     if(changed){data.events.push({type,at});if(data.events.length>100){data.events.shift();data.omitted_events++}}
@@ -85,9 +86,14 @@ function updateAttention(){
   if(!state.blurred&&blurred)data.blur_count++;
   if(!(state.hidden||state.blurred)&&(hidden||blurred))data.away_count++;
   state.hidden=hidden;state.blurred=blurred;
+  updateAttentionStatus();
 }
-function persistAttention(){
-  updateAttention();
+function updateAttentionStatus(){
+  const data=attentionState?.data;
+  $('attention-status').textContent=data?'이 문제 화면 이탈 '+data.away_count+'회 · '+(data.away_ms/1000).toFixed(1)+'초 (탭 숨김 '+data.hidden_count+'회 · 포커스 이탈 '+data.blur_count+'회)':'';
+}
+function persistAttention(event){
+  updateAttention(event);
   if(!attentionState)return;
   const state=attentionState,record=codeRecord(state.studentId,state.problemId);
   record.attention=state.data;persistCode(state.studentId,state.problemId,record);
@@ -98,7 +104,7 @@ function startAttention(){
   attentionState={studentId:currentStudent,problemId:activeProblem,data,hidden:false,blurred:false,last:performance.now()};
   record.attention=data;persistAttention();
 }
-function stopAttention(){persistAttention();attentionState=null}
+function stopAttention(){persistAttention();attentionState=null;updateAttentionStatus()}
 function attentionSnapshot(){
   updateAttention();
   if(!attentionState)return null;
@@ -123,7 +129,7 @@ function persistCode(studentId,problemId,record){
 function updateCodeStatus(){
   const record=currentStudent&&activeProblem?codeRecord(currentStudent,activeProblem):{};
   $('restore-accepted').disabled=!record.accepted;
-  $('code-save-status').textContent=cacheFailed?'브라우저 저장에 실패했습니다. 코드를 파일로 보관하세요.':record.accepted?'자동 저장됨 · 정답 제출 #'+record.accepted.submission_id+' 원문 별도 보관':'이 브라우저에 자동 저장됨';
+  $('code-save-status').textContent=cacheFailed?'브라우저 저장에 실패했습니다. 코드를 파일로 보관하세요.':record.accepted?'자동 저장됨 · 정답 제출 #'+record.accepted.submission_id+($('code').value===record.accepted.code?' 원문 표시 중':' 원문 별도 보관'):'이 브라우저에 자동 저장됨';
 }
 function saveDraft(){
   if(!currentStudent||!activeProblem)return;
@@ -143,17 +149,22 @@ function rememberAccepted(studentId,problemId,code,submissionId){
 function notePaste(value){entryStats.pasted_chars+=value.length;entryStats.largest_paste_chars=Math.max(entryStats.largest_paste_chars,value.length)}
 function saveStudentIdentity(){localStorage.setItem('judge.studentId',$('student-id').value.trim());localStorage.setItem('judge.studentName',$('student-name').value.trim())}
 function loadStudentIdentity(){$('student-id').value=localStorage.getItem('judge.studentId')||'';$('student-name').value=localStorage.getItem('judge.studentName')||''}
-function renderProblem(){
+function renderProblem(preferAccepted=false){
   saveDraft();
   const p=problems.find(item=>item.id===$('problem').value);
   if(!p)return;
-  if(activeProblem!==p.id){
+  const changingProblem=activeProblem!==p.id;
+  if(changingProblem){
     stopAttention();
     activeProblem=p.id;
+  }
+  if(changingProblem||(preferAccepted&&codeRecord(currentStudent,p.id).accepted)){
     const record=codeRecord(currentStudent,p.id);
-    $('code').value=typeof record.draft==='string'?record.draft:record.accepted?.code??(p.id==='sum-two'?initialCode:'');
-    Object.assign(entryStats,emptyEntry(),record.entry||{});
-    $('code-file').value='';startAttention();saveDraft();
+    $('code').value=record.accepted?.code??(typeof record.draft==='string'?record.draft:(p.id==='sum-two'?initialCode:''));
+    Object.assign(entryStats,emptyEntry(),record.accepted?{}:record.entry||{});
+    $('code-file').value='';
+    if(changingProblem)startAttention();
+    saveDraft();
   }
   updateCodeStatus();
   for(const button of $('problem-list').querySelectorAll('button'))button.classList.toggle('selected',button.dataset.id===p.id);
@@ -172,7 +183,7 @@ function renderWeek(preferredProblem=$('problem').value){
   const stateById=new Map((weekState?.problems||[]).map(p=>[p.id,p]));
   $('problem').replaceChildren(...selected.map(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=(stateById.get(p.id)?.solved?'✓ ':'')+p.title;return option}));
   if(selected.some(p=>p.id===preferredProblem))$('problem').value=preferredProblem;
-  $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem()};return button}));
+  $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem(true)};return button}));
   $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
   if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
 }
@@ -233,18 +244,25 @@ async function execute(mode){
     $('status').textContent=labels[verdict]||verdict;
     $('status').className='badge '+(['OK','ACCEPTED'].includes(verdict)?'good':'bad');
     $('detail').textContent=result.cases?`${result.passed} / ${result.total}개 테스트 통과 · 제출 #${result.submission_id} · 입력 방식: ${entryLabels[result.entry_method]||'확인 불가'}`:'';
+    if(mode==='submit')$('detail').textContent+=result.attention_saved===true?' · 화면 활동 저장됨':' · 화면 활동 저장을 확인하지 못했습니다. 서버 재시작 후 다시 제출하세요.';
     $('stdout').textContent=result.stdout||'';$('stderr').textContent=result.stderr||'';
     if(mode==='submit')await loadProblems();
   }catch(error){$('status').textContent='요청 오류';$('status').className='badge bad';$('stderr').textContent=error.message}
   finally{for(const id of ['run','submit'])$(id).disabled=false}
 }
-$('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=renderProblem;$('week').onchange=()=>renderWeek();
+$('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=()=>renderProblem(true);$('week').onchange=()=>renderWeek();
 $('code').addEventListener('input',saveDraft);
 document.addEventListener('visibilitychange',persistAttention);
 window.addEventListener('blur',persistAttention);
 window.addEventListener('focus',persistAttention);
 window.addEventListener('pagehide',()=>{saveDraft();stopAttention()});
 window.addEventListener('pageshow',startAttention);
+setInterval(()=>{
+  if(!attentionState)return;
+  const before=attentionState.hidden+':'+attentionState.blurred;
+  updateAttention();
+  if(before!==attentionState.hidden+':'+attentionState.blurred)persistAttention();
+},1000);
 $('restore-accepted').onclick=()=>{
   const accepted=codeRecord(currentStudent,activeProblem).accepted;
   if(!accepted)return;
