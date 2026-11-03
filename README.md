@@ -26,9 +26,15 @@ Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Deskto
 
 학번과 이름은 같은 브라우저의 로컬 저장소에 보관되어 다음 로그인 때 채워집니다. 공용 PC에서는 **로그아웃** 후 **저장된 정보 지우기**를 누르세요. 관리자 화면의 **주차별 제출 현황**에서 학번 또는 이름으로 검색하고, 주차 칸을 눌러 문제별 제출·정답 상태를 볼 수 있습니다.
 
+코드 편집기는 **Ctrl + # (Ctrl + Shift + 3)**으로 현재 줄이나 선택한 여러 줄의 주석을 넣고 뺄 수 있습니다. 작성 중인 코드는 학생·문제별로 브라우저에 자동 저장되어 문제 전환과 새로고침 후에도 유지됩니다. 정답 판정을 받은 제출 원문은 별도로 보관하며 **정답 코드 복원**으로 불러올 수 있습니다. 작성 중인 코드와 정답 코드는 따로 관리되므로 채점 중에 수정한 코드가 정답 원문을 덮어쓰지 않습니다. 브라우저 저장소가 비어 있으면 서버에 저장된 해당 학생의 마지막 정답 코드를 불러옵니다.
+
+관리자 **주차별 제출 현황**에서는 드롭다운으로 조회할 주차를 선택합니다. 학번·이름·제출수·정답수 열 제목을 누르면 오름차순·내림차순으로 정렬됩니다. 제출수는 해당 주차의 총 제출 횟수이며 정답수는 정답 판정을 받은 서로 다른 문제 수입니다. 정렬은 전체 검색 결과에 적용된 뒤 100명씩 표시됩니다.
+
 디자인 색상과 컴포넌트 규격은 [DESIGN.md](DESIGN.md)에 정리했습니다.
 
 제출할 때 브라우저가 코드 편집기의 입력 이벤트를 기록합니다. 한 번에 붙여 넣은 문자가 최종 코드의 90% 이상이고 20자 이상이면 **전체 붙여넣기**로 표시합니다. 일부 붙여넣기, 직접 입력, 파일 업로드, 확인 불가도 구분합니다. 이 정보는 브라우저에서 보내므로 우회할 수 있고, 붙여넣기 여부가 LLM 사용 여부를 증명하지는 않습니다.
+
+문제를 열어 둔 동안의 `visibilitychange`와 창 `blur`/`focus` 이벤트도 학생·문제별로 브라우저에 누적합니다. 제출 버튼을 누른 시점의 탭 숨김·포커스 이탈 횟수, 각 지속 시간, 두 상태의 중복을 제외한 화면 이탈 횟수·시간, 최근 100개 이벤트 발생 시각을 해당 제출에 고정해 저장합니다. 문제를 전환하거나 페이지를 닫은 이후의 시간은 이전 문제에 누적하지 않습니다. 작성 코드와 함께 기록을 복원하므로 새로고침 후에도 앞서 관찰한 집계는 유지됩니다. 관리자 **최근 제출 → 보기**에서 요약과 이벤트를 확인할 수 있고 이전 제출은 **미수집**으로 표시됩니다. 브라우저가 보고한 참고 정보이며 다른 탭의 주소·제목·내용은 수집하지 않습니다. 탭 이동과 다른 프로그램 사용을 확정적으로 구분할 수 없습니다.
 
 ## 동작
 
@@ -57,6 +63,7 @@ python server.py
 - `POST /api/student/login`: `{"student_id":"00123","student_name":"김학생","class_code":"AS006"}`
 - `POST /api/student/logout`: 현재 세션 종료
 - `GET /api/student/me`, `GET /api/student/progress`: 현재 학생과 주차별 풀이 현황
+- `GET /api/student/accepted-codes`: 로그인한 학생의 문제별 마지막 정답 제출 원문
 - `POST /api/run`: 로그인 세션에서 `{"code":"print(input())","stdin":"hello\n"}`
 - `POST /api/submit`: 로그인 세션에서 `{"problem_id":"sum-two","code":"a,b=map(int,input().split());print(a+b)"}`
 - `POST /api/admin/weeks`: 주차 추가
@@ -64,7 +71,7 @@ python server.py
 - `POST /api/admin/students/import`: `.xlsx` 학생 명단 가져오기
 - `GET /api/admin/students`: 학생 목록
 - `GET /api/admin/submissions`: 최근 제출 목록
-- `GET /api/admin/progress?query=&offset=0`: 학번별 주차 제출 현황(100명씩)
+- `GET /api/admin/progress?query=&offset=0&week_id=week-10&sort=attempts&direction=desc`: 주차별 제출 현황(100명씩). 정렬 키: `student_id`, `name`, `attempts`, `accepted`; 정렬 방향: `asc`, `desc`. `week_id` 생략 시 전체 주차를 반환합니다.
 - `GET /api/admin/class-code`: 현재 수업 코드 상태 조회
 - `POST /api/admin/class-code`: `{"code":"새수업코드"}`로 수업 코드 변경
 

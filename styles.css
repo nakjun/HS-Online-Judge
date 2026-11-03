@@ -68,6 +68,8 @@ th, td { border-bottom: 1px solid var(--hs-border); }
 .progress-cell.complete { background: #e2f3eb; color: var(--hs-success); }
 .progress-cell.empty { background: #f4f3f5; color: var(--hs-muted); }
 .progress-detail { margin-top: 14px; padding: 14px; border: 1px solid var(--hs-border); border-radius: 8px; background: #fbfafd; }
+button.progress-sort { margin: 0; padding: 4px 2px; background: transparent; color: var(--hs-violet-dark); white-space: nowrap; }
+button.progress-sort:hover { background: var(--hs-violet-soft); }
 @media (max-width: 760px) {
   .wrap { padding: 18px 12px 36px; }
   .brand-strip-inner { padding: 9px 12px; }

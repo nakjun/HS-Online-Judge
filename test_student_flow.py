@@ -12,6 +12,7 @@ from openpyxl import Workbook
 
 import server
 import storage
+from test_attention import observation
 
 
 class StudentFlowTest(unittest.TestCase):
@@ -53,6 +54,7 @@ class StudentFlowTest(unittest.TestCase):
                 self.assertEqual((status, imported["created"]), (200, 1))
                 body = {"problem_id": "sum-two", "student_id": "00123", "student_name": "김학생",
                         "code": "a,b=map(int,input().split());print(a+b)",
+                        "attention": observation(),
                         "entry": {"largest_paste_chars": 42, "pasted_chars": 42, "typed_chars": 0, "file_upload": False}}
                 self.assertEqual(request("/api/submit", body)[0], 401)
                 self.assertEqual(request("/api/student/login", {"student_id": "00123", "student_name": "다른이름", "class_code": "AS006"})[0], 401)
@@ -71,6 +73,24 @@ class StudentFlowTest(unittest.TestCase):
                 self.assertEqual(storage.list_submissions()[0]["student_id"], "00123")
                 self.assertEqual(storage.list_submissions()[0]["entry_method"], "FULL_PASTE")
                 self.assertEqual(storage.get_submission(result["submission_id"])["code"], body["code"])
+                self.assertEqual(storage.get_submission(result["submission_id"])["attention"], observation())
+                for path in ("/api/admin/submissions", "/api/admin/submissions/" + str(result["submission_id"])):
+                    connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+                    connection.request("GET", path, headers={"Authorization": "Bearer " + server.ADMIN_TOKEN})
+                    response = connection.getresponse()
+                    payload = json.loads(response.read())
+                    self.assertEqual(response.status, 200)
+                    record = payload[0] if isinstance(payload, list) else payload
+                    self.assertEqual(record["attention"], observation())
+                    connection.close()
+                connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+                connection.request("GET", "/api/student/accepted-codes?student_id=someone-else",
+                                   headers={"Cookie": session_cookie})
+                response = connection.getresponse()
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.loads(response.read()), [{"problem_id": "sum-two",
+                                  "submission_id": result["submission_id"], "code": body["code"]}])
+                connection.close()
                 connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
                 connection.request("GET", "/api/student/progress", headers={"Cookie": session_cookie})
                 response = connection.getresponse()
@@ -94,6 +114,28 @@ class StudentFlowTest(unittest.TestCase):
                 connection.close()
                 self.assertEqual(response.status, 200)
                 self.assertEqual(api_progress["rows"][0]["student_id"], "00123")
+                connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+                connection.request("GET", "/api/admin/progress?week_id=week-1&sort=attempts&direction=desc",
+                                   headers={"Authorization": "Bearer " + server.ADMIN_TOKEN})
+                response = connection.getresponse()
+                filtered = json.loads(response.read())
+                self.assertEqual(response.status, 200)
+                self.assertEqual([w["id"] for w in filtered["weeks"]], ["week-1"])
+                self.assertEqual(filtered["rows"][0]["attempts"], 1)
+                connection.close()
+                connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+                connection.request("GET", "/api/admin/progress?sort=invalid",
+                                   headers={"Authorization": "Bearer " + server.ADMIN_TOKEN})
+                response = connection.getresponse()
+                self.assertEqual(response.status, 400)
+                response.read()
+                connection.close()
+                connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
+                connection.request("GET", "/api/student/accepted-codes")
+                response = connection.getresponse()
+                self.assertEqual(response.status, 401)
+                response.read()
+                connection.close()
                 self.assertEqual(request("/api/admin/class-code", {"code": "NEW789"})[0], 401)
                 self.assertEqual(request("/api/admin/class-code", {"code": "NEW789"}, True)[0], 200)
                 self.assertFalse(storage.verify_class_code("AS006"))

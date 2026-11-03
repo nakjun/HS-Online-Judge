@@ -40,7 +40,8 @@
     <main>
       <div class="panel student-banner"><div><span class="eyebrow">SIGNED IN</span><h2 id="student-label">학생</h2></div><button id="logout" class="secondary">로그아웃</button></div>
       <div class="panel"><h2>Python 3 코드</h2><label for="code-file">.py 파일 선택</label><input id="code-file" type="file" accept=".py,text/x-python"><p class="muted">파일을 선택하면 아래 편집기에 코드가 표시됩니다.</p><textarea id="code" spellcheck="false">a, b = map(int, input().split())
-print(a + b)</textarea><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
+print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 또는 선택한 줄의 주석 전환. 코드는 학생·문제별로 이 브라우저에 자동 저장됩니다.</p><p id="code-save-status" class="muted" role="status"></p><button id="restore-accepted" class="secondary" disabled>정답 코드 복원</button><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
+      <p class="muted">문제를 열어 둔 동안의 탭 숨김·창 포커스 이탈 횟수와 시간이 제출 시 관리자에게 전달됩니다.</p>
       <div class="panel"><h2>결과</h2><div id="status" class="badge">대기 중</div><div id="detail" class="muted"></div><label>표준 출력</label><pre id="stdout"></pre><label>오류 출력</label><pre id="stderr"></pre></div>
     </main>
   </div>
@@ -54,12 +55,107 @@ let progressWeeks = [];
 const labels = {OK:'정상 종료',ACCEPTED:'정답',WRONG_ANSWER:'오답',RUNTIME_ERROR:'실행 오류',TIME_LIMIT:'시간 초과',OUTPUT_LIMIT:'출력 제한 초과',SYSTEM_ERROR:'서버 실행 환경 오류'};
 const entryLabels={FULL_PASTE:'전체 붙여넣기',PARTIAL_PASTE:'일부 붙여넣기',FILE_UPLOAD:'파일 업로드',TYPED:'직접 입력',UNKNOWN:'확인 불가'};
 const entryStats={largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:false};
+const emptyEntry=()=>({largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:false});
+const codeRecords=new Map();
+const initialCode=$('code').value;
+let currentStudent=null,activeProblem=null,loadVersion=0,cacheFailed=false;
+let attentionState=null;
+function attentionData(saved){
+  const data={version:1,started_at:new Date().toISOString(),away_count:0,away_ms:0,hidden_count:0,hidden_ms:0,blur_count:0,blur_ms:0,events:[],omitted_events:0};
+  if(saved?.version===1){
+    if(typeof saved.started_at==='string')data.started_at=saved.started_at;
+    for(const field of ['away_count','away_ms','hidden_count','hidden_ms','blur_count','blur_ms','omitted_events'])if((field.endsWith('_ms')?Number.isFinite(saved[field]):Number.isSafeInteger(saved[field]))&&saved[field]>=0)data[field]=saved[field];
+    if(Array.isArray(saved.events))data.events=saved.events.slice(-100);
+  }
+  return data;
+}
+function updateAttention(){
+  if(!attentionState)return;
+  const state=attentionState,data=state.data,now=performance.now(),elapsed=Math.max(0,now-state.last);
+  if(state.hidden)data.hidden_ms+=elapsed;
+  if(state.blurred)data.blur_ms+=elapsed;
+  if(state.hidden||state.blurred)data.away_ms+=elapsed;
+  state.last=now;
+  const hidden=document.visibilityState==='hidden',blurred=!document.hasFocus();
+  const at=new Date().toISOString();
+  for(const [changed,type] of [[state.hidden!==hidden,hidden?'hidden':'visible'],[state.blurred!==blurred,blurred?'blur':'focus']]){
+    if(changed){data.events.push({type,at});if(data.events.length>100){data.events.shift();data.omitted_events++}}
+  }
+  if(!state.hidden&&hidden)data.hidden_count++;
+  if(!state.blurred&&blurred)data.blur_count++;
+  if(!(state.hidden||state.blurred)&&(hidden||blurred))data.away_count++;
+  state.hidden=hidden;state.blurred=blurred;
+}
+function persistAttention(){
+  updateAttention();
+  if(!attentionState)return;
+  const state=attentionState,record=codeRecord(state.studentId,state.problemId);
+  record.attention=state.data;persistCode(state.studentId,state.problemId,record);
+}
+function startAttention(){
+  if(!currentStudent||!activeProblem||attentionState)return;
+  const record=codeRecord(currentStudent,activeProblem),data=attentionData(record.attention);
+  attentionState={studentId:currentStudent,problemId:activeProblem,data,hidden:false,blurred:false,last:performance.now()};
+  record.attention=data;persistAttention();
+}
+function stopAttention(){persistAttention();attentionState=null}
+function attentionSnapshot(){
+  updateAttention();
+  if(!attentionState)return null;
+  const data=JSON.parse(JSON.stringify(attentionState.data));
+  for(const field of ['away_ms','hidden_ms','blur_ms'])data[field]=Math.floor(data[field]);
+  data.submitted_at=new Date().toISOString();return data;
+}
+const codeKey=(studentId,problemId)=>'judge.code.v1.'+encodeURIComponent(studentId)+'.'+encodeURIComponent(problemId);
+function codeRecord(studentId,problemId){
+  const key=codeKey(studentId,problemId);
+  if(!codeRecords.has(key)){
+    let record={};
+    try{const saved=JSON.parse(localStorage.getItem(key)||'{}');if(saved&&typeof saved==='object')record=saved}catch{}
+    codeRecords.set(key,record);
+  }
+  return codeRecords.get(key);
+}
+function persistCode(studentId,problemId,record){
+  try{localStorage.setItem(codeKey(studentId,problemId),JSON.stringify(record));cacheFailed=false}
+  catch{cacheFailed=true}
+}
+function updateCodeStatus(){
+  const record=currentStudent&&activeProblem?codeRecord(currentStudent,activeProblem):{};
+  $('restore-accepted').disabled=!record.accepted;
+  $('code-save-status').textContent=cacheFailed?'브라우저 저장에 실패했습니다. 코드를 파일로 보관하세요.':record.accepted?'자동 저장됨 · 정답 제출 #'+record.accepted.submission_id+' 원문 별도 보관':'이 브라우저에 자동 저장됨';
+}
+function saveDraft(){
+  if(!currentStudent||!activeProblem)return;
+  updateAttention();
+  const record=codeRecord(currentStudent,activeProblem);
+  record.draft=$('code').value;record.entry={...entryStats};
+  persistCode(currentStudent,activeProblem,record);updateCodeStatus();
+}
+function rememberAccepted(studentId,problemId,code,submissionId){
+  const record=codeRecord(studentId,problemId);
+  if(!record.accepted||submissionId>record.accepted.submission_id){
+    record.accepted={code,submission_id:submissionId};
+    persistCode(studentId,problemId,record);
+  }
+  if(currentStudent===studentId&&activeProblem===problemId)updateCodeStatus();
+}
 function notePaste(value){entryStats.pasted_chars+=value.length;entryStats.largest_paste_chars=Math.max(entryStats.largest_paste_chars,value.length)}
 function saveStudentIdentity(){localStorage.setItem('judge.studentId',$('student-id').value.trim());localStorage.setItem('judge.studentName',$('student-name').value.trim())}
 function loadStudentIdentity(){$('student-id').value=localStorage.getItem('judge.studentId')||'';$('student-name').value=localStorage.getItem('judge.studentName')||''}
 function renderProblem(){
+  saveDraft();
   const p=problems.find(item=>item.id===$('problem').value);
   if(!p)return;
+  if(activeProblem!==p.id){
+    stopAttention();
+    activeProblem=p.id;
+    const record=codeRecord(currentStudent,p.id);
+    $('code').value=typeof record.draft==='string'?record.draft:record.accepted?.code??(p.id==='sum-two'?initialCode:'');
+    Object.assign(entryStats,emptyEntry(),record.entry||{});
+    $('code-file').value='';startAttention();saveDraft();
+  }
+  updateCodeStatus();
   for(const button of $('problem-list').querySelectorAll('button'))button.classList.toggle('selected',button.dataset.id===p.id);
   $('description').replaceChildren();
   for(const [title,value] of [['설명',p.description],['입력',p.input],['출력',p.output],['예제 입력',p.samples[0].input],['예제 출력',p.samples[0].output]]){
@@ -69,38 +165,47 @@ function renderProblem(){
   }
   $('stdin').value=p.samples[0].input;
 }
-function renderWeek(){
+function renderWeek(preferredProblem=$('problem').value){
+  saveDraft();
   const selected=problems.filter(p=>(p.week_id||'week-1')===$('week').value);
   const weekState=progressWeeks.find(w=>w.id===$('week').value);
   const stateById=new Map((weekState?.problems||[]).map(p=>[p.id,p]));
   $('problem').replaceChildren(...selected.map(p=>{const option=document.createElement('option');option.value=p.id;option.textContent=(stateById.get(p.id)?.solved?'✓ ':'')+p.title;return option}));
+  if(selected.some(p=>p.id===preferredProblem))$('problem').value=preferredProblem;
   $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem()};return button}));
   $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
-  if(selected.length)renderProblem();else $('description').textContent='이 주차에는 아직 문제가 없습니다.';
+  if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
 }
 async function loadProblems(){
-  const previousWeek=$('week').value,previousProblem=$('problem').value;
-  const [weekData,problemData,progressData]=await Promise.all([
+  const studentId=currentStudent,version=++loadVersion;
+  const [weekData,problemData,progressData,acceptedData]=await Promise.all([
     fetch('/api/weeks',{cache:'no-store'}).then(r=>r.json()),
     fetch('/api/problems',{cache:'no-store'}).then(r=>r.json()),
-    fetch('/api/student/progress',{cache:'no-store'}).then(r=>r.json())
+    fetch('/api/student/progress',{cache:'no-store'}).then(r=>r.json()),
+    fetch('/api/student/accepted-codes',{cache:'no-store'}).then(r=>r.json())
   ]);
-  if(!Array.isArray(weekData)||!Array.isArray(problemData)||!Array.isArray(progressData))throw Error('로그인이 필요합니다.');
+  if(currentStudent!==studentId||version!==loadVersion)return;
+  if(!Array.isArray(weekData)||!Array.isArray(problemData)||!Array.isArray(progressData)||!Array.isArray(acceptedData))throw Error('로그인이 필요합니다.');
+  for(const item of acceptedData)rememberAccepted(studentId,item.problem_id,item.code,item.submission_id);
+  const previousWeek=$('week').value,previousProblem=$('problem').value;
   weeks=weekData;problems=problemData;progressWeeks=progressData;
   $('week').replaceChildren(...weeks.map(w=>{const option=document.createElement('option');const state=progressWeeks.find(item=>item.id===w.id);option.value=w.id;option.textContent=w.title+(state?' · '+state.problems.filter(p=>p.solved).length+'/'+state.problems.length:'');return option}));
   if(weeks.some(w=>w.id===previousWeek))$('week').value=previousWeek;
-  renderWeek();
-  if(problems.some(p=>p.id===previousProblem && (p.week_id||'week-1')===$('week').value)){$('problem').value=previousProblem;renderProblem()}
+  renderWeek(previousProblem);
 }
 async function execute(mode){
+  saveDraft();
+  const studentId=currentStudent;
+  const body={code:$('code').value};
+  if(mode==='run')body.stdin=$('stdin').value;
+  else {body.problem_id=activeProblem;body.entry={...entryStats};body.attention=attentionSnapshot()}
   for(const id of ['run','submit'])$(id).disabled=true;
   $('status').textContent='실행 중…';$('status').className='badge';$('detail').textContent='';$('stdout').textContent='';$('stderr').textContent='';
   try{
-    const body={code:$('code').value};
-    if(mode==='run')body.stdin=$('stdin').value;
-    else {body.problem_id=$('problem').value;body.entry={...entryStats}}
     const response=await fetch('/api/'+mode,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const result=await response.json();
+    if(mode==='submit'&&result.verdict==='ACCEPTED')rememberAccepted(studentId,body.problem_id,body.code,result.submission_id);
+    if(currentStudent!==studentId)return;
     if(response.status===401){showLogin();$('login-error').textContent=result.error||'다시 로그인하세요.';return}
     if(!response.ok)throw new Error(result.error||'요청 실패');
     const verdict=result.verdict||result.status;
@@ -112,17 +217,55 @@ async function execute(mode){
   }catch(error){$('status').textContent='요청 오류';$('status').className='badge bad';$('stderr').textContent=error.message}
   finally{for(const id of ['run','submit'])$(id).disabled=false}
 }
-$('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=renderProblem;$('week').onchange=renderWeek;
+$('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=renderProblem;$('week').onchange=()=>renderWeek();
+$('code').addEventListener('input',saveDraft);
+document.addEventListener('visibilitychange',persistAttention);
+window.addEventListener('blur',persistAttention);
+window.addEventListener('focus',persistAttention);
+window.addEventListener('pagehide',()=>{saveDraft();stopAttention()});
+window.addEventListener('pageshow',startAttention);
+$('restore-accepted').onclick=()=>{
+  const accepted=codeRecord(currentStudent,activeProblem).accepted;
+  if(!accepted)return;
+  $('code').value=accepted.code;Object.assign(entryStats,emptyEntry());$('code-file').value='';saveDraft();
+};
 $('student-id').addEventListener('input',saveStudentIdentity);$('student-name').addEventListener('input',saveStudentIdentity);
 $('clear-student').onclick=()=>{localStorage.removeItem('judge.studentId');localStorage.removeItem('judge.studentName');$('student-id').value='';$('student-name').value=''};
 $('code').addEventListener('paste',event=>notePaste(event.clipboardData?.getData('text')||''));
 $('code').addEventListener('drop',event=>notePaste(event.dataTransfer?.getData('text')||''));
 $('code').addEventListener('beforeinput',event=>{if(['insertText','insertCompositionText'].includes(event.inputType))entryStats.typed_chars+=(event.data||'').length});
 $('code').addEventListener('keydown',event=>{
+  if(event.isComposing)return;
+  if(event.ctrlKey&&!event.altKey&&!event.metaKey&&(event.key==='#'||(event.shiftKey&&event.code==='Digit3'))){
+    event.preventDefault();
+    const editor=event.currentTarget,start=editor.selectionStart,end=editor.selectionEnd;
+    const lineStart=start===0?0:editor.value.lastIndexOf('\n',start-1)+1;
+    const last=end>start&&editor.value[end-1]==='\n'?end-1:end;
+    const next=editor.value.indexOf('\n',last),lineEnd=next<0?editor.value.length:next;
+    const lines=editor.value.slice(lineStart,lineEnd).split('\n');
+    const nonempty=lines.filter(line=>line.trim());
+    const uncomment=nonempty.length>0&&nonempty.every(line=>/^[ \t]*#/.test(line));
+    const edits=[];let position=lineStart;
+    for(const line of lines){
+      if(line.trim()||lines.length===1){
+        const indent=(line.match(/^[ \t]*/)||[''])[0].length;
+        const removed=uncomment?(line.slice(indent).match(/^# ?/)||[''])[0].length:0;
+        edits.push({at:position+indent,removed,text:uncomment?'':'# '});
+      }
+      position+=line.length+1;
+    }
+    const adjust=point=>{let delta=0;for(const edit of edits){if(point<edit.at)break;delta+=edit.text.length-Math.min(edit.removed,point-edit.at)}return point+delta};
+    const direction=editor.selectionDirection;
+    for(const edit of [...edits].reverse())editor.setRangeText(edit.text,edit.at,edit.at+edit.removed,'preserve');
+    editor.setSelectionRange(adjust(start),adjust(end),direction);
+    if(!uncomment)entryStats.typed_chars+=edits.length*2;
+    saveDraft();return;
+  }
   if(event.key!=='Tab'||event.ctrlKey||event.altKey||event.metaKey)return;
   event.preventDefault();
   const editor=event.currentTarget,start=editor.selectionStart,end=editor.selectionEnd;
-  const lineStart=editor.value.lastIndexOf('\n',start-1)+1;
+  const lineStart=start===0?0:editor.value.lastIndexOf('\n',start-1)+1;
+  try{
   if(start===end){
     if(!event.shiftKey){editor.setRangeText('    ',start,end,'end');entryStats.typed_chars+=4;return}
     const indent=(editor.value.slice(lineStart).match(/^ {1,4}|^\t/)||[''])[0];
@@ -136,12 +279,20 @@ $('code').addEventListener('keydown',event=>{
   const changed=lines.map(line=>event.shiftKey?line.replace(/^ {1,4}|^\t/,''):'    '+line).join('\n');
   editor.setRangeText(changed,lineStart,lineEnd,'select');
   if(!event.shiftKey)entryStats.typed_chars+=4*lines.length;
+  }finally{saveDraft()}
 });
-$('code-file').onchange=async()=>{const file=$('code-file').files[0];if(!file)return;if(!file.name.toLowerCase().endsWith('.py')||file.size>32000){$('stderr').textContent='.py 파일은 32KB 이하여야 합니다.';return}$('code').value=await file.text();Object.assign(entryStats,{largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:true})};
+$('code-file').onchange=async()=>{
+  const file=$('code-file').files[0],studentId=currentStudent,problemId=activeProblem;
+  if(!file||!studentId||!problemId)return;
+  if(!file.name.toLowerCase().endsWith('.py')||file.size>32000){$('stderr').textContent='.py 파일은 32KB 이하여야 합니다.';return}
+  const code=await file.text(),record=codeRecord(studentId,problemId);
+  record.draft=code;record.entry={...emptyEntry(),file_upload:true};persistCode(studentId,problemId,record);
+  if(currentStudent===studentId&&activeProblem===problemId){$('code').value=code;Object.assign(entryStats,record.entry);updateCodeStatus()}
+};
 $('refresh-problems').onclick=()=>loadProblems().catch(e=>{$('stderr').textContent=e.message});
 window.addEventListener('focus',()=>{if(!$('app-shell').hidden)loadProblems().catch(()=>{})});
-function showLogin(){$('login-view').hidden=false;$('app-shell').hidden=true}
-async function showApp(student){$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
+function showLogin(){saveDraft();stopAttention();currentStudent=null;activeProblem=null;loadVersion++;$('code').value='';$('login-view').hidden=false;$('app-shell').hidden=true}
+async function showApp(student){saveDraft();stopAttention();currentStudent=student.student_id;activeProblem=null;$('code').value='';$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
 async function login(){
   $('login').disabled=true;$('login-error').textContent='';
   try{

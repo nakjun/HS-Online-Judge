@@ -26,8 +26,8 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 <div class="panel" id="admin-auth"><h2>관리자 로그인</h2><p class="note">관리자 토큰은 AS006입니다. 로그인 상태는 이 브라우저에 저장됩니다.</p><input id="token" type="password" autocomplete="off" placeholder="관리자 토큰"><button id="check" class="secondary">로그인</button></div>
 <div class="panel"><h2>수업 코드 관리</h2><p id="class-code-status" class="note">관리자 인증 후 현재 상태를 확인할 수 있습니다.</p><div class="row"><div><label for="new-class-code">새 수업 코드</label><input id="new-class-code" type="password" autocomplete="new-password" placeholder="영문·숫자 4~32자"></div><div><label for="confirm-class-code">새 수업 코드 확인</label><input id="confirm-class-code" type="password" autocomplete="new-password" placeholder="같은 코드를 다시 입력"></div></div><button id="save-class-code">수업 코드 저장</button><p class="note">코드를 바꾸면 기존 학생은 로그아웃되며 새 코드로 다시 로그인해야 합니다.</p></div>
 <div class="panel"><h2>학생 명단 가져오기</h2><p class="note">.xlsx 첫 행에 <strong>학번</strong>과 <strong>이름</strong> 열이 필요합니다. 기존 학번은 이름을 갱신하며, 파일에 없는 학생은 유지됩니다. 앞자리 0이 있는 학번은 엑셀에서 텍스트로 저장하세요.</p><input id="roster-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><button id="import-roster">엑셀 가져오기</button><button id="refresh-data" class="secondary">목록 새로고침</button><h3>등록된 학생</h3><div class="scroll"><table><thead><tr><th>학번</th><th>이름</th></tr></thead><tbody id="student-rows"></tbody></table></div></div>
-<div class="panel"><h2>주차별 제출 현황</h2><p class="note">학번별로 각 주차에 제출한 문제 수와 정답 수를 확인합니다. 주차 칸을 누르면 문제별 상태가 표시됩니다.</p><div class="row"><div><label for="progress-query">학번 또는 이름 검색</label><input id="progress-query" placeholder="검색어"></div><div><label>&nbsp;</label><button id="progress-search">검색</button></div></div><div class="scroll"><table><thead><tr id="progress-head"></tr></thead><tbody id="progress-rows"></tbody></table></div><div class="row"><div id="progress-count" class="note"></div><div style="text-align:right"><button id="progress-prev" class="secondary">이전</button> <button id="progress-next" class="secondary">다음</button></div></div><div id="progress-detail" class="progress-detail">주차 칸을 선택하세요.</div></div>
-<div class="panel"><h2>최근 제출</h2><p class="note">입력 방식은 브라우저 이벤트로 기록한 참고 정보입니다. LLM 사용 여부를 증명하지 않습니다.</p><div class="scroll"><table><thead><tr><th>번호</th><th>학번</th><th>이름</th><th>문제</th><th>결과</th><th>입력 방식</th><th>시간</th><th>코드</th></tr></thead><tbody id="submission-rows"></tbody></table></div><pre id="submission-code" style="white-space:pre-wrap;overflow:auto"></pre></div>
+<div class="panel"><h2>주차별 제출 현황</h2><p class="note">선택한 주차의 제출 횟수와 정답 문제 수를 확인합니다. 학번·이름·제출수·정답수 제목을 누르면 정렬 방향을 바꿀 수 있습니다.</p><div class="row"><div><label for="progress-week">조회 주차</label><select id="progress-week"></select></div><div><label for="progress-query">학번 또는 이름 검색</label><input id="progress-query" placeholder="검색어"><button id="progress-search">검색</button></div></div><div class="scroll"><table><thead><tr id="progress-head"></tr></thead><tbody id="progress-rows"></tbody></table></div><div class="row"><div id="progress-count" class="note"></div><div style="text-align:right"><button id="progress-prev" class="secondary">이전</button> <button id="progress-next" class="secondary">다음</button></div></div><div id="progress-detail" class="progress-detail">상세 보기에서 문제별 상태를 확인하세요.</div></div>
+<div class="panel"><h2>최근 제출</h2><p class="note">입력 방식과 화면 이탈은 브라우저에서 관찰한 참고 기록입니다. 다른 탭의 주소·내용은 수집하지 않으며 LLM 사용 여부를 증명하지 않습니다. 화면 이탈 시간은 탭 숨김과 포커스 이탈이 겹친 시간을 한 번만 계산합니다.</p><div class="scroll"><table><thead><tr><th>번호</th><th>학번</th><th>이름</th><th>문제</th><th>결과</th><th>입력 방식</th><th>화면 이탈</th><th>시간</th><th>상세</th></tr></thead><tbody id="submission-rows"></tbody></table></div><div id="submission-activity" class="progress-detail" hidden></div><pre id="submission-code" style="white-space:pre-wrap;overflow:auto"></pre></div>
 <div class="panel"><h2>주차 추가</h2><label for="week-title">주차 이름</label><input id="week-title" placeholder="예: 2주차"><button id="add-week">주차 추가</button></div>
 <div class="panel"><h2>문제 추가</h2><div class="row"><div><label for="week">주차</label><select id="week"></select></div><div><label for="title">문제 제목</label><input id="title" placeholder="예: 세 수의 합"></div></div>
 <label for="description">문제 설명</label><textarea id="description"></textarea>
@@ -70,10 +70,19 @@ async function request(path,body){
   const response=await fetch(path,{method:body?'POST':'GET',headers:{'Authorization':'Bearer '+(adminToken||$('token').value),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();if(!response.ok){if(response.status===401&&adminToken)showAuth();throw Error(result.error||'요청 실패')}return result;
 }
-async function refreshWeeks(){const weeks=await request('/api/weeks');$('week').replaceChildren(...weeks.map(w=>{const option=document.createElement('option');option.value=w.id;option.textContent=w.title;return option}))}
+async function refreshWeeks(){
+  const weeks=await request('/api/weeks');
+  for(const id of ['week','progress-week']){
+    const previous=$(id).value;
+    $(id).replaceChildren(...weeks.map(w=>{const option=document.createElement('option');option.value=w.id;option.textContent=w.title;return option}));
+    if(weeks.some(w=>w.id===previous))$(id).value=previous;
+    else if(id==='progress-week'&&weeks.length)$(id).value=weeks[weeks.length-1].id;
+  }
+}
 async function refreshClassCode(){const status=await request('/api/admin/class-code');$('class-code-status').textContent=status.is_default?'현재 기본 수업 코드: AS006':'사용자 지정 수업 코드가 설정되어 있습니다.'}
 function fillRows(target,items,fields){$(target).replaceChildren(...items.map(item=>{const tr=document.createElement('tr');for(const field of fields){const td=document.createElement('td');td.textContent=String(item[field]??'');tr.append(td)}return tr}))}
 let progressOffset=0,progressTotal=0;
+let progressSort='student_id',progressDirection='asc',progressVersion=0;
 function showProgressDetail(student,cell,week){
   const box=$('progress-detail');box.replaceChildren();
   const heading=document.createElement('strong');heading.textContent=student.student_id+' '+student.name+' · '+week.title;box.append(heading);
@@ -84,11 +93,19 @@ function showProgressDetail(student,cell,week){
 function renderProgress(data){
   progressTotal=data.total_students;
   const head=$('progress-head');head.replaceChildren();
-  for(const title of ['학번','이름',...data.weeks.map(w=>w.title)]){const th=document.createElement('th');th.textContent=title;head.append(th)}
+  for(const [title,key] of [['학번','student_id'],['이름','name'],['제출수','attempts'],['정답수','accepted']]){
+    const th=document.createElement('th'),button=document.createElement('button');
+    const active=progressSort===key;th.setAttribute('aria-sort',active?(progressDirection==='asc'?'ascending':'descending'):'none');
+    button.className='progress-sort';button.textContent=title+(active?(progressDirection==='asc'?' ↑':' ↓'):' ↕');
+    button.onclick=async()=>{progressDirection=progressSort===key?(progressDirection==='asc'?'desc':'asc'):['accepted','attempts'].includes(key)?'desc':'asc';progressSort=key;progressOffset=0;try{await refreshProgress()}catch(e){message(e.message)}};
+    th.append(button);head.append(th);
+  }
+  const detailHead=document.createElement('th');detailHead.textContent=data.weeks.map(w=>w.title).join(', ')+' 상세';head.append(detailHead);
   const rows=$('progress-rows');rows.replaceChildren();
   for(const student of data.rows){
     const tr=document.createElement('tr');
-    for(const text of [student.student_id,student.name]){const td=document.createElement('td');td.textContent=text;tr.append(td)}
+    const total=student.weeks.reduce((sum,cell)=>sum+cell.total,0);
+    for(const text of [student.student_id,student.name,student.attempts+'회',student.accepted+' / '+total]){const td=document.createElement('td');td.textContent=text;tr.append(td)}
     student.weeks.forEach((cell,index)=>{const td=document.createElement('td'),button=document.createElement('button');button.className='progress-cell '+(cell.submitted===0?'empty':cell.accepted===cell.total&&cell.total>0?'complete':'');button.textContent=cell.submitted+'/'+cell.total+' 제출 · '+cell.accepted+' 정답';button.onclick=()=>showProgressDetail(student,cell,data.weeks[index]);td.append(button);tr.append(td)});
     rows.append(tr);
   }
@@ -96,18 +113,35 @@ function renderProgress(data){
   $('progress-prev').disabled=progressOffset===0;$('progress-next').disabled=progressOffset+data.rows.length>=data.total_students;
 }
 async function refreshProgress(){
-  const query=encodeURIComponent($('progress-query').value.trim());
-  const data=await request('/api/admin/progress?query='+query+'&offset='+progressOffset);
+  const version=++progressVersion;
+  const query=new URLSearchParams({query:$('progress-query').value.trim(),offset:progressOffset,week_id:$('progress-week').value,sort:progressSort,direction:progressDirection});
+  const data=await request('/api/admin/progress?'+query);
+  if(version!==progressVersion)return;
+  $('progress-detail').textContent='상세 보기에서 문제별 상태를 확인하세요.';
   renderProgress(data);
 }
 function fillSubmissions(items){
   const labels={FULL_PASTE:'전체 붙여넣기',PARTIAL_PASTE:'일부 붙여넣기',FILE_UPLOAD:'파일 업로드',TYPED:'직접 입력',UNKNOWN:'확인 불가'};
-  fillRows('submission-rows',items.map(item=>({...item,entry_method:labels[item.entry_method]||'확인 불가'})),['id','student_id','name','problem_id','verdict','entry_method','created_at']);
+  fillRows('submission-rows',items.map(item=>({...item,entry_method:labels[item.entry_method]||'확인 불가',attention_summary:item.attention?item.attention.away_count+'회 · '+attentionSeconds(item.attention.away_ms):'미수집'})),['id','student_id','name','problem_id','verdict','entry_method','attention_summary','created_at']);
   for(const [index,item] of items.entries()){
     const td=document.createElement('td'),button=document.createElement('button');button.textContent='보기';button.className='secondary';
-    button.onclick=async()=>{try{const detail=await request('/api/admin/submissions/'+item.id);$('submission-code').textContent=detail.code}catch(e){message(e.message)}};
+    button.onclick=async()=>{try{const detail=await request('/api/admin/submissions/'+item.id);$('submission-code').textContent=detail.code;showAttention(detail)}catch(e){message(e.message)}};
     td.append(button);$('submission-rows').children[index].append(td);
   }
+}
+function attentionSeconds(ms){return (ms/1000).toFixed(1)+'초'}
+function showAttention(submission){
+  const box=$('submission-activity');box.hidden=false;box.replaceChildren();
+  const heading=document.createElement('strong');heading.textContent='제출 #'+submission.id+' · '+submission.student_id+' '+submission.name+' · 화면 활동';box.append(heading);
+  const data=submission.attention,summary=document.createElement('p');box.append(summary);
+  if(!data){summary.textContent='화면 활동 미수집 (이전 제출 또는 기록을 제공하지 않은 브라우저)';return}
+  summary.textContent='화면 이탈 '+data.away_count+'회 / '+attentionSeconds(data.away_ms)+' · 탭 숨김 '+data.hidden_count+'회 / '+attentionSeconds(data.hidden_ms)+' · 포커스 이탈 '+data.blur_count+'회 / '+attentionSeconds(data.blur_ms);
+  const period=document.createElement('p');period.textContent='이 문제를 열어 둔 동안 누적 · 관찰 시작 '+new Date(data.started_at).toLocaleString('ko-KR')+' · 제출 '+new Date(data.submitted_at).toLocaleString('ko-KR');box.append(period);
+  if(data.omitted_events){const note=document.createElement('p');note.textContent='최근 100개 이벤트 표시 · 이전 '+data.omitted_events+'개는 요약 집계에 포함됩니다.';box.append(note)}
+  const names={hidden:'탭 숨김',visible:'탭 다시 표시',blur:'창 포커스 이탈',focus:'창 포커스 복귀'};
+  const list=document.createElement('ul');
+  for(const event of data.events){const li=document.createElement('li');li.textContent=new Date(event.at).toLocaleString('ko-KR')+' · '+names[event.type];list.append(li)}
+  box.append(list);
 }
 async function refreshData(){
   const [students,submissions]=await Promise.all([request('/api/admin/students'),request('/api/admin/submissions'),refreshProgress()]);
@@ -128,6 +162,7 @@ $('save-class-code').onclick=async()=>{try{
 $('refresh-data').onclick=async()=>{try{const count=await refreshData();message('학생 '+count+'명 조회 완료')}catch(e){message(e.message)}};
 $('progress-search').onclick=async()=>{try{progressOffset=0;await refreshProgress()}catch(e){message(e.message)}};
 $('progress-query').onkeydown=event=>{if(event.key==='Enter')$('progress-search').click()};
+$('progress-week').onchange=async()=>{progressOffset=0;try{await refreshProgress()}catch(e){message(e.message)}};
 $('progress-prev').onclick=async()=>{try{progressOffset=Math.max(0,progressOffset-100);await refreshProgress()}catch(e){message(e.message)}};
 $('progress-next').onclick=async()=>{try{progressOffset+=100;await refreshProgress()}catch(e){message(e.message)}};
 $('import-roster').onclick=async()=>{try{

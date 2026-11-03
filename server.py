@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from runner import run_code
 from storage import class_code_status, create_student_session, delete_student_session, get_submission, import_students, init_db, list_students, list_submissions, progress_page, save_submission, session_student, set_class_code, student_exists, student_progress, verify_class_code
+from storage import accepted_codes
 
 ROOT = Path(__file__).parent
 PROBLEMS_FILE = ROOT / "problems.json"
@@ -132,12 +133,14 @@ class Handler(BaseHTTPRequestHandler):
             if not self.current_student() and not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "학생 로그인이 필요합니다."})
             return self.reply(200, [{key: value for key, value in problem.items() if key != "tests"} for problem in read_data()[1]])
-        if path in ("/api/student/me", "/api/student/progress"):
+        if path in ("/api/student/me", "/api/student/progress", "/api/student/accepted-codes"):
             student = self.current_student()
             if not student:
                 return self.reply(401, {"error": "학생 로그인이 필요합니다."})
             if path.endswith("/me"):
                 return self.reply(200, student)
+            if path.endswith("/accepted-codes"):
+                return self.reply(200, accepted_codes(student["student_id"]))
             weeks, problems = read_data()
             return self.reply(200, student_progress(student["student_id"], weeks, problems))
         if path == "/api/admin/problems":
@@ -162,7 +165,14 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 return self.reply(400, {"error": "offset은 숫자여야 합니다."})
             weeks, problems = read_data()
-            return self.reply(200, progress_page(weeks, problems, query, offset))
+            try:
+                data = progress_page(weeks, problems, query, offset,
+                                     week_id=parameters.get("week_id", [""])[0],
+                                     sort=parameters.get("sort", ["student_id"])[0],
+                                     direction=parameters.get("direction", ["asc"])[0])
+            except ValueError as exc:
+                return self.reply(400, {"error": str(exc)})
+            return self.reply(200, data)
         if path.startswith("/api/admin/submissions/"):
             if not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
@@ -190,7 +200,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(401, {"error": "학생 로그인이 필요합니다."})
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            limit = 3_000_000 if path == "/api/admin/students/import" else 40_000
+            limit = 3_000_000 if path == "/api/admin/students/import" else 80_000 if path == "/api/submit" else 40_000
             if length < 1 or length > limit:
                 return self.reply(413, {"error": f"요청은 {limit}바이트 이하여야 합니다."})
             body = json.loads(self.rfile.read(length))
@@ -280,7 +290,8 @@ class Handler(BaseHTTPRequestHandler):
                     break
             passed_count = sum(c["passed"] for c in cases)
             entry = body.get("entry")
-            submission_id = save_submission(student["student_id"], problem["id"], code, verdict, passed_count, len(problem["tests"]), entry)
+            submission_id = save_submission(student["student_id"], problem["id"], code, verdict, passed_count,
+                                            len(problem["tests"]), entry, body.get("attention"))
             return self.reply(200, {"submission_id": submission_id, "entry_method": get_submission(submission_id)["entry_method"],
                                     "verdict": verdict, "passed": passed_count,
                                     "total": len(problem["tests"]), "cases": cases})

@@ -1,5 +1,6 @@
 """Student roster import and submission persistence."""
 import io
+import json
 import hashlib
 import hmac
 import re
@@ -8,6 +9,7 @@ import sqlite3
 import time
 import zipfile
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -67,6 +69,7 @@ def init_db():
             "largest_paste_chars": "INTEGER NOT NULL DEFAULT 0",
             "pasted_chars": "INTEGER NOT NULL DEFAULT 0",
             "typed_chars": "INTEGER NOT NULL DEFAULT 0",
+            "attention_json": "TEXT",
         }.items():
             if column not in existing:
                 db.execute(f"ALTER TABLE submissions ADD COLUMN {column} {definition}")
@@ -220,6 +223,16 @@ def student_progress(student_id, weeks, problems):
         for week in weeks]
 
 
+def accepted_codes(student_id):
+    """Return this student's most recent accepted source for each problem."""
+    with connect() as db:
+        return [dict(row) for row in db.execute("""SELECT s.problem_id, s.id AS submission_id, s.code
+            FROM submissions s JOIN (
+                SELECT problem_id, MAX(id) AS id FROM submissions
+                WHERE student_id=? AND verdict='ACCEPTED' GROUP BY problem_id
+            ) latest ON s.id=latest.id ORDER BY s.id""", (student_id,))]
+
+
 def classify_entry(code, entry):
     if not isinstance(entry, dict):
         return "UNKNOWN", 0, 0, 0
@@ -243,12 +256,59 @@ def classify_entry(code, entry):
     return method, largest, pasted, typed
 
 
-def save_submission(student_id, problem_id, code, verdict, passed, total, entry=None):
+def normalize_attention(value):
+    """Validate optional browser observations; older clients remain untracked."""
+    if not isinstance(value, dict) or type(value.get("version")) is not int or value["version"] != 1:
+        return None
+    result = {"version": 1}
+    for field in ("away_count", "hidden_count", "blur_count", "omitted_events",
+                  "away_ms", "hidden_ms", "blur_ms"):
+        number = value.get(field)
+        limit = 31_536_000_000 if field.endswith("_ms") else 1_000_000
+        if type(number) is not int or not 0 <= number <= limit:
+            return None
+        result[field] = number
+
+    def timestamp(text):
+        if not isinstance(text, str) or not 20 <= len(text) <= 35:
+            raise ValueError("Invalid observation timestamp")
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            raise ValueError("Observation timestamp needs a timezone")
+        return text
+
+    try:
+        for field in ("started_at", "submitted_at"):
+            result[field] = timestamp(value.get(field))
+        events = value.get("events")
+        if not isinstance(events, list) or len(events) > 100:
+            return None
+        result["events"] = []
+        for event in events:
+            if not isinstance(event, dict) or event.get("type") not in ("hidden", "visible", "blur", "focus"):
+                return None
+            result["events"].append({"type": event["type"], "at": timestamp(event.get("at"))})
+    except (ValueError, TypeError):
+        return None
+    return result
+
+
+def submission_record(row):
+    record = dict(row)
+    raw = record.pop("attention_json", None)
+    record["attention"] = json.loads(raw) if raw else None
+    return record
+
+
+def save_submission(student_id, problem_id, code, verdict, passed, total, entry=None, attention=None):
     method, largest, pasted, typed = classify_entry(code, entry)
+    observed = normalize_attention(attention)
     with connect() as db:
         cursor = db.execute("""INSERT INTO submissions(student_id, problem_id, code, verdict, passed, total,
-            entry_method, largest_paste_chars, pasted_chars, typed_chars) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                            (student_id, problem_id, code, verdict, passed, total, method, largest, pasted, typed))
+            entry_method, largest_paste_chars, pasted_chars, typed_chars, attention_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                            (student_id, problem_id, code, verdict, passed, total, method, largest, pasted, typed,
+                             json.dumps(observed, ensure_ascii=False) if observed is not None else None))
         return cursor.lastrowid
 
 
@@ -259,8 +319,8 @@ def list_students():
 
 def list_submissions():
     with connect() as db:
-        return [dict(row) for row in db.execute("""SELECT s.id, s.student_id, st.name, s.problem_id,
-            s.verdict, s.passed, s.total, s.entry_method, s.largest_paste_chars, s.created_at
+        return [submission_record(row) for row in db.execute("""SELECT s.id, s.student_id, st.name, s.problem_id,
+            s.verdict, s.passed, s.total, s.entry_method, s.largest_paste_chars, s.created_at, s.attention_json
             FROM submissions s JOIN students st ON st.student_id=s.student_id
             ORDER BY s.id DESC LIMIT 200""")]
 
@@ -269,18 +329,35 @@ def get_submission(submission_id):
     with connect() as db:
         row = db.execute("""SELECT s.*, st.name FROM submissions s
             JOIN students st ON st.student_id=s.student_id WHERE s.id=?""", (submission_id,)).fetchone()
-        return dict(row) if row else None
+        return submission_record(row) if row else None
 
 
-def progress_page(weeks, problems, query="", offset=0, limit=100):
+def progress_page(weeks, problems, query="", offset=0, limit=100,
+                  week_id="", sort="student_id", direction="asc"):
     """Return one roster page with per-week, per-problem submission state."""
+    if week_id:
+        weeks = [week for week in weeks if week["id"] == week_id]
+        if not weeks:
+            raise ValueError("주차를 찾을 수 없습니다.")
+    if sort not in ("student_id", "name", "accepted", "attempts") or direction not in ("asc", "desc"):
+        raise ValueError("정렬 옵션이 올바르지 않습니다.")
+    sort_column = {"student_id": "st.student_id", "name": "st.name",
+                   "accepted": "accepted", "attempts": "attempts"}[sort]
+    week_ids = {week["id"] for week in weeks}
+    problem_ids = [p["id"] for p in problems if (p.get("week_id") or "week-1") in week_ids]
     with connect() as db:
         pattern = "%" + query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
-        where = "WHERE student_id LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\'"
-        total_students = db.execute(f"SELECT COUNT(*) FROM students {where}", (pattern, pattern)).fetchone()[0]
+        where = "WHERE st.student_id LIKE ? ESCAPE '\\' OR st.name LIKE ? ESCAPE '\\'"
+        total_students = db.execute(f"SELECT COUNT(*) FROM students st {where}", (pattern, pattern)).fetchone()[0]
+        problem_filter = ",".join("?" for _ in problem_ids) or "NULL"
         students = [dict(row) for row in db.execute(
-            f"SELECT student_id, name FROM students {where} ORDER BY student_id LIMIT ? OFFSET ?",
-            (pattern, pattern, limit, offset))]
+            f"""SELECT st.student_id, st.name, COUNT(s.id) AS attempts,
+                COUNT(DISTINCT CASE WHEN s.verdict='ACCEPTED' THEN s.problem_id END) AS accepted
+                FROM students st LEFT JOIN submissions s
+                ON s.student_id=st.student_id AND s.problem_id IN ({problem_filter})
+                {where} GROUP BY st.student_id, st.name
+                ORDER BY {sort_column} {direction}, st.student_id ASC LIMIT ? OFFSET ?""",
+            (*problem_ids, pattern, pattern, limit, offset))]
         ids = [student["student_id"] for student in students]
         submission_state = {}
         if ids:
@@ -310,6 +387,7 @@ def progress_page(weeks, problems, query="", offset=0, limit=100):
                                 "accepted": state["accepted"] if state else False,
                                 "latest_verdict": state["latest_verdict"] if state else ""})
             cells.append({"week_id": week["id"], "total": len(details),
+                          "attempts": sum(item["attempts"] for item in details),
                           "submitted": sum(item["attempts"] > 0 for item in details),
                           "accepted": sum(item["accepted"] for item in details), "problems": details})
         rows.append({**student, "weeks": cells})
