@@ -14,8 +14,16 @@ $runtime = Join-Path $PSScriptRoot 'runtime'
 
 function Test-Judge {
     try {
-        $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-        return $response.StatusCode -eq 200 -and $response.Content.Contains('<title>Python Judge</title>')
+        $request = [System.Net.HttpWebRequest]::Create($url)
+        $request.Proxy = $null
+        $request.Timeout = 3000
+        $request.ReadWriteTimeout = 3000
+        $response = $request.GetResponse()
+        try {
+            $reader = New-Object System.IO.StreamReader($response.GetResponseStream())
+            try { return $reader.ReadToEnd().Contains('<title>Python Judge</title>') }
+            finally { $reader.Dispose() }
+        } finally { $response.Close() }
     } catch { return $false }
 }
 
@@ -129,14 +137,25 @@ try {
         }
         Write-Host '[5/5] Starting Python Judge server...'
         New-Item -ItemType Directory -Path $runtime -Force | Out-Null
-        $process = Start-Process -FilePath $python -ArgumentList @('"' + $serverPath + '"') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtime 'server.out.log') -RedirectStandardError (Join-Path $runtime 'server.err.log') -PassThru
+        $process = Start-Process -FilePath $python -ArgumentList @('-u', ('"' + $serverPath + '"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtime 'server.out.log') -RedirectStandardError (Join-Path $runtime 'server.err.log') -PassThru
         $ready = $false
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
             Start-Sleep -Seconds 1
             if (Test-Judge) { $ready = $true; break }
+            Write-Host ("Waiting for server response... attempt {0}/20 (PID {1})" -f ($attempt + 1), $process.Id)
+            $process.Refresh()
             if ($process.HasExited) { break }
         }
-        if (-not $ready) { throw "Server startup failed. Check $runtime\server.err.log" }
+        if (-not $ready) {
+            foreach ($file in @('server.err.log', 'server.out.log')) {
+                $logPath = Join-Path $runtime $file
+                if (Test-Path -LiteralPath $logPath) {
+                    Write-Host "--- $file ---"
+                    Get-Content -LiteralPath $logPath -Tail 30 | Out-Host
+                }
+            }
+            throw "Server did not respond at $url. See server output above and $runtime\server.err.log"
+        }
     }
     Write-Host "Python Judge: $url"
     if (-not $NoBrowser) { Write-Host "Opening browser: $url"; Start-Process $url | Out-Null }
