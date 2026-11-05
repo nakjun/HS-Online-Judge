@@ -147,6 +147,12 @@ try {
             if ($process.HasExited) { break }
         }
         if (-not $ready) {
+            $serverError = Get-Content -LiteralPath (Join-Path $runtime 'server.err.log') -Raw -ErrorAction SilentlyContinue
+            if ($serverError -match '10013') {
+                Write-Host "Windows denied binding to port $Port. The port may be reserved or restricted." -ForegroundColor Yellow
+                Write-Host 'Try another port: run.cmd -Port 18000'
+                Write-Host 'View reserved TCP ports: netsh interface ipv4 show excludedportrange protocol=tcp'
+            }
             foreach ($file in @('server.err.log', 'server.out.log')) {
                 $logPath = Join-Path $runtime $file
                 if (Test-Path -LiteralPath $logPath) {
