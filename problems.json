@@ -170,5 +170,97 @@
       {"input": "1\nAa1!aaaa\n", "output": "VALID\n"},
       {"input": "20\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \nAa1!aaa\nAa1!aaaa\nPython1@\nPython1#\nAaaaaaa!\nAaaaaa12\n Python1!\nPyth on1!\nPython1!$\n!@#1aABC\n1!aaaaaA\nA\n        \nPython1!_\nAa1!aaaaaaaaaaaaaaaa\n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nVALID\n"}
     ]
+  },
+  {
+    "id": "week-10-file-extension",
+    "week_id": "week-10",
+    "title": "파일 확장자 추출하기 — 쉬움(Lv1)",
+    "description": "파일 이름을 입력받아 확장자를 소문자로 출력하시오. 확장자는 마지막 마침표(.) 뒤의 문자열을 의미함.\n\n학습 포인트: split(\".\")으로 문자열을 나눔. 음수 인덱스로 마지막 요소에 접근함. lower()로 대소문자를 통일함.",
+    "input": "파일 이름 한 줄이 주어짐. 파일 이름에는 마침표가 하나 이상 포함됨. 마지막 문자는 마침표가 아니며, 공백은 포함되지 않음. 문자열 길이는 3 이상 100 이하임.",
+    "output": "파일 확장자를 소문자로 출력함.",
+    "samples": [
+      {
+        "input": "lecture.backup.PDF\n",
+        "output": "pdf\n"
+      }
+    ],
+    "tests": [
+      {
+        "input": "lecture.backup.PDF\n",
+        "output": "pdf\n"
+      },
+      {
+        "input": "a.X\n",
+        "output": "x\n"
+      },
+      {
+        "input": "archive.tar.Gz\n",
+        "output": "gz\n"
+      },
+      {
+        "input": ".env\n",
+        "output": "env\n"
+      },
+      {
+        "input": "report..final.TxT\n",
+        "output": "txt\n"
+      },
+      {
+        "input": "README.Py3\n",
+        "output": "py3\n"
+      },
+      {
+        "input": "a.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n",
+        "output": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+      }
+    ]
+  },
+  {
+    "id": "week-10-compress-text",
+    "week_id": "week-10",
+    "title": "연속된 문자 압축하기 — 어려움(Lv3)",
+    "description": "문자열에서 같은 문자가 연속으로 등장하는 구간을 문자와 등장 횟수로 압축하시오. 문자열을 전달받아 압축 결과를 반환하는 함수 compress_text(text)를 작성하시오.\n\n같은 문자가 연속되면 하나의 구간으로 처리함. 한 번만 등장한 문자도 횟수 1을 붙임. 같은 문자라도 떨어져 있으면 서로 다른 구간으로 처리함. 예를 들어 AAABBACCCC는 A3B2A1C4로 압축함.\n\n구현 조건: 함수 내부에서 반복문과 조건문을 사용함. count()와 외부 라이브러리는 사용하지 않음. 등장 횟수는 str()로 변환하여 결과 문자열에 연결할 수 있음. 입력과 출력은 함수 밖에서 처리함.\n\n제출 안내: 함수를 정의한 뒤, 함수 밖에서 표준 입력으로 문자열을 읽어 함수를 호출하고 반환된 압축 문자열을 출력하시오.",
+    "input": "길이가 1 이상 100 이하인 영문 대문자 문자열이 주어짐.",
+    "output": "압축한 문자열을 출력함.",
+    "samples": [
+      {
+        "input": "AAABBACCCC\n",
+        "output": "A3B2A1C4\n"
+      },
+      {
+        "input": "ABCDEFGHI\n",
+        "output": "A1B1C1D1E1F1G1H1I1\n"
+      }
+    ],
+    "tests": [
+      {
+        "input": "AAABBACCCC\n",
+        "output": "A3B2A1C4\n"
+      },
+      {
+        "input": "ABCDEFGHI\n",
+        "output": "A1B1C1D1E1F1G1H1I1\n"
+      },
+      {
+        "input": "Z\n",
+        "output": "Z1\n"
+      },
+      {
+        "input": "ABABA\n",
+        "output": "A1B1A1B1A1\n"
+      },
+      {
+        "input": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n",
+        "output": "A100\n"
+      },
+      {
+        "input": "AAAAAAAAABBBBBBBBBBAAAAAAAAAAAZ\n",
+        "output": "A9B10A11Z1\n"
+      },
+      {
+        "input": "ABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB\n",
+        "output": "A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1A1B1\n"
+      }
+    ]
   }
 ]

@@ -169,7 +169,11 @@ function renderProblem(preferAccepted=false){
   updateCodeStatus();
   for(const button of $('problem-list').querySelectorAll('button'))button.classList.toggle('selected',button.dataset.id===p.id);
   $('description').replaceChildren();
-  for(const [title,value] of [['설명',p.description],['입력',p.input],['출력',p.output],['예제 입력',p.samples[0].input],['예제 출력',p.samples[0].output]]){
+  const sampleFields=p.samples.flatMap((sample,index)=>{
+    const suffix=p.samples.length>1?' '+(index+1):'';
+    return [['예제 입력'+suffix,sample.input],['예제 출력'+suffix,sample.output]];
+  });
+  for(const [title,value] of [['설명',p.description],['입력',p.input],['출력',p.output],...sampleFields]){
     const heading=document.createElement('label');heading.textContent=title;
     const content=document.createElement(title.startsWith('예제')?'pre':'p');content.textContent=value;
     $('description').append(heading,content);
