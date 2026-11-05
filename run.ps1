@@ -19,9 +19,9 @@ function Test-Judge {
     } catch { return $false }
 }
 
-function Test-NativeCommand([string]$executable, [string[]]$arguments) {
+function Test-NativeCommand([string]$executable, [string[]]$arguments, [int]$TimeoutSeconds = 8) {
     $ErrorActionPreference = 'Continue'
-    $output = & $executable @arguments 2>&1
+    $output = & $script:python (Join-Path $PSScriptRoot 'check-startup.py') $TimeoutSeconds $executable @arguments 2>&1
     $succeeded = $LASTEXITCODE -eq 0
     if (-not $succeeded) { $script:lastCheckError = ($output | Out-String).Trim() }
     return $succeeded
@@ -45,6 +45,12 @@ foreach ($key in @('PATH', 'JUDGE_HOST', 'JUDGE_PORT', 'JUDGE_ALLOWED_SUBNETS'))
 }
 
 try {
+    Write-Host '[1/5] Checking existing server...'
+    New-Item -ItemType Directory -Path $runtime -Force | Out-Null
+    Start-Transcript -Path (Join-Path $runtime 'startup.log') -Force | Out-Null
+    $transcriptStarted = $true
+    Write-Host "Project: $PSScriptRoot"
+    Write-Host "Local URL: $url"
     $running = Test-Judge
     $listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
     if ($listeners.Count -gt 0 -and -not $running) { throw "Port $Port is used by another application." }
@@ -70,11 +76,13 @@ try {
     if ($running) {
         Write-Host 'Using the existing server. After git pull, use run.cmd -Restart to reload server code.'
     } else {
+        Write-Host '[2/5] Checking Python and dependencies...'
         $python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
         if (-not (Test-Path -LiteralPath $python)) { throw 'Python environment missing. Run install.cmd first.' }
         if (-not (Test-NativeCommand $python @('-c', 'import sys, openpyxl; raise SystemExit(sys.version_info < (3, 10))'))) {
             throw "Python dependencies unavailable. Run install.cmd first. $script:lastCheckError"
         }
+        Write-Host '[3/5] Checking Docker (up to 8 seconds per check)...'
         $docker = Find-Docker
         if (-not $docker) { throw 'Docker is missing. Run install.cmd first.' }
         $env:PATH = (Split-Path -Parent $docker) + ';' + $env:PATH
@@ -84,10 +92,13 @@ try {
                 (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')
             ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
             if (-not $desktop) { throw "Start Docker Desktop, then try again. $script:lastCheckError" }
+            Write-Host "Docker is not ready: $script:lastCheckError"
             Start-Process -FilePath $desktop -WindowStyle Hidden | Out-Null
-            Write-Host 'Waiting for Docker Desktop...'
+            Write-Host 'Starting Docker Desktop. Open Docker Desktop to complete any initial setup.'
             $dockerReady = $false
-            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            $dockerWait = [Diagnostics.Stopwatch]::StartNew()
+            while ($dockerWait.Elapsed.TotalSeconds -lt 120) {
+                Write-Host ("Waiting for Docker Desktop... {0}/120 seconds" -f [int]$dockerWait.Elapsed.TotalSeconds)
                 Start-Sleep -Seconds 2
                 if (Test-NativeCommand $docker @('info', '--format', '{{.ServerVersion}}')) { $dockerReady = $true; break }
             }
@@ -97,6 +108,7 @@ try {
         if (-not (Test-NativeCommand $docker @('image', 'inspect', $image))) {
             throw "Grading image missing: $image. Run install.cmd first."
         }
+        Write-Host '[4/5] Checking network configuration...'
         $env:JUDGE_PORT = [string]$Port
         $env:JUDGE_HOST = '127.0.0.1'
         $env:JUDGE_ALLOWED_SUBNETS = ''
@@ -115,6 +127,7 @@ try {
             $env:JUDGE_ALLOWED_SUBNETS = $subnet.Trim()
             Write-Host "Student LAN URL: http://$($address.IPAddress):$Port/"
         }
+        Write-Host '[5/5] Starting Python Judge server...'
         New-Item -ItemType Directory -Path $runtime -Force | Out-Null
         $process = Start-Process -FilePath $python -ArgumentList @('"' + $serverPath + '"') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtime 'server.out.log') -RedirectStandardError (Join-Path $runtime 'server.err.log') -PassThru
         $ready = $false
@@ -126,12 +139,15 @@ try {
         if (-not $ready) { throw "Server startup failed. Check $runtime\server.err.log" }
     }
     Write-Host "Python Judge: $url"
-    if (-not $NoBrowser) { Start-Process $url | Out-Null }
+    if (-not $NoBrowser) { Write-Host "Opening browser: $url"; Start-Process $url | Out-Null }
+    Write-Host 'Startup complete.'
     exit 0
 } catch {
     Write-Host ('ERROR: ' + $_.Exception.Message) -ForegroundColor Red
+    Write-Host "Startup log: $runtime\startup.log"
     exit 1
 } finally {
+    if ($transcriptStarted) { Stop-Transcript | Out-Null }
     foreach ($key in $originalEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($key, $originalEnvironment[$key], 'Process')
     }
