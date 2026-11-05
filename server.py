@@ -138,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             if not student:
                 return self.reply(401, {"error": "학생 로그인이 필요합니다."})
             if path.endswith("/me"):
-                return self.reply(200, student)
+                return self.reply(200, student, {"Set-Cookie": f"judge_session={self.session_token()}; HttpOnly; SameSite=Lax; Path=/"})
             if path.endswith("/accepted-codes"):
                 return self.reply(200, accepted_codes(student["student_id"]))
             weeks, problems = read_data()
@@ -217,7 +217,7 @@ class Handler(BaseHTTPRequestHandler):
                 delete_student_session(self.session_token())
                 session = create_student_session(student_id)
                 return self.reply(200, {"student_id": student_id, "name": student_name},
-                                  {"Set-Cookie": f"judge_session={session}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000"})
+                                  {"Set-Cookie": f"judge_session={session}; HttpOnly; SameSite=Lax; Path=/"})
             if path == "/api/admin/class-code":
                 return self.reply(200, set_class_code(body.get("code")))
             if path == "/api/admin/students/import":

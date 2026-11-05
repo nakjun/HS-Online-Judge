@@ -24,12 +24,12 @@
   <section id="login-view" class="panel login-panel">
     <span class="eyebrow">STUDENT SIGN IN</span><h2>학생 로그인</h2>
     <p>엑셀 명단에 등록된 학번과 이름을 입력하세요.</p>
-    <label for="student-id">학번</label><input id="student-id" autocomplete="username" placeholder="학번">
-    <label for="student-name">이름</label><input id="student-name" autocomplete="name" placeholder="이름">
+    <label for="student-id">학번</label><input id="student-id" autocomplete="off" placeholder="학번">
+    <label for="student-name">이름</label><input id="student-name" autocomplete="off" placeholder="이름">
     <label for="class-code">수업 코드</label><input id="class-code" type="password" autocomplete="off" placeholder="기본값 AS006">
     <div class="actions"><button id="login" class="primary">로그인</button><button id="clear-student" class="secondary" type="button">저장된 정보 지우기</button></div>
     <p id="login-error" class="login-error" role="alert"></p>
-    <p class="muted">학번과 이름은 이 브라우저에 유지됩니다. 공용 PC에서는 사용 후 로그아웃하고 정보를 지워 주세요.</p>
+    <p class="muted">학번·이름·수업 코드는 브라우저 저장소에 저장하지 않습니다. 사용 후 로그아웃해 주세요.</p>
   </section>
   <div id="app-shell" hidden>
   <div class="grid">
@@ -58,6 +58,31 @@ const entryLabels={FULL_PASTE:'전체 붙여넣기',PARTIAL_PASTE:'일부 붙여
 const entryStats={largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:false};
 const emptyEntry=()=>({largest_paste_chars:0,pasted_chars:0,typed_chars:0,file_upload:false});
 const codeRecords=new Map();
+const editorHistories=new Map();
+let applyingHistory=false;
+function captureHistory(){
+  if(applyingHistory||!currentStudent||!activeProblem)return;
+  const key=codeKey(currentStudent,activeProblem),editor=$('code');
+  let history=editorHistories.get(key);
+  if(!history){history={items:[],index:-1};editorHistories.set(key,history)}
+  if(history.items[history.index]?.code===editor.value)return;
+  history.items.splice(history.index+1);
+  history.items.push({code:editor.value,start:editor.selectionStart,end:editor.selectionEnd});
+  while(history.items.length>100)history.items.shift();
+  history.index=history.items.length-1;
+}
+function moveHistory(direction){
+  if(!currentStudent||!activeProblem)return;
+  const history=editorHistories.get(codeKey(currentStudent,activeProblem));
+  if(!history)return;
+  const next=history.index+direction;
+  if(next<0||next>=history.items.length)return;
+  history.index=next;
+  const item=history.items[next];
+  applyingHistory=true;
+  try{$('code').value=item.code;$('code').setSelectionRange(item.start,item.end);saveDraft()}
+  finally{applyingHistory=false}
+}
 const initialCode=$('code').value;
 let currentStudent=null,activeProblem=null,loadVersion=0,cacheFailed=false;
 let attentionState=null;
@@ -134,6 +159,7 @@ function updateCodeStatus(){
 }
 function saveDraft(){
   if(!currentStudent||!activeProblem)return;
+  captureHistory();
   updateAttention();
   const record=codeRecord(currentStudent,activeProblem);
   record.draft=$('code').value;record.entry={...entryStats};
@@ -148,8 +174,7 @@ function rememberAccepted(studentId,problemId,code,submissionId){
   if(currentStudent===studentId&&activeProblem===problemId)updateCodeStatus();
 }
 function notePaste(value){entryStats.pasted_chars+=value.length;entryStats.largest_paste_chars=Math.max(entryStats.largest_paste_chars,value.length)}
-function saveStudentIdentity(){localStorage.setItem('judge.studentId',$('student-id').value.trim());localStorage.setItem('judge.studentName',$('student-name').value.trim())}
-function loadStudentIdentity(){$('student-id').value=localStorage.getItem('judge.studentId')||'';$('student-name').value=localStorage.getItem('judge.studentName')||''}
+function clearSavedLogin(){for(const key of ['judge.studentId','judge.studentName','judge.adminToken']){try{localStorage.removeItem(key)}catch{}}}
 function appendProblemInline(node,text){
   const pattern=/\b(?:[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)|True|False|VALID|INVALID)/g;
   let end=0;
@@ -324,13 +349,24 @@ $('restore-accepted').onclick=()=>{
   if(!accepted)return;
   $('code').value=accepted.code;Object.assign(entryStats,emptyEntry());$('code-file').value='';saveDraft();
 };
-$('student-id').addEventListener('input',saveStudentIdentity);$('student-name').addEventListener('input',saveStudentIdentity);
 $('clear-student').onclick=()=>{localStorage.removeItem('judge.studentId');localStorage.removeItem('judge.studentName');$('student-id').value='';$('student-name').value=''};
 $('code').addEventListener('paste',event=>notePaste(event.clipboardData?.getData('text')||''));
 $('code').addEventListener('drop',event=>notePaste(event.dataTransfer?.getData('text')||''));
 $('code').addEventListener('beforeinput',event=>{if(['insertText','insertCompositionText'].includes(event.inputType))entryStats.typed_chars+=(event.data||'').length});
 $('code').addEventListener('keydown',event=>{
   if(event.isComposing)return;
+  if((event.ctrlKey||event.metaKey)&&!event.altKey&&['z','y'].includes(event.key.toLowerCase())){
+    event.preventDefault();moveHistory(event.key.toLowerCase()==='y'||event.shiftKey?1:-1);return;
+  }
+  if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.metaKey){
+    event.preventDefault();
+    const editor=event.currentTarget,start=editor.selectionStart,end=editor.selectionEnd;
+    const lineStart=start===0?0:editor.value.lastIndexOf('\n',start-1)+1;
+    const before=editor.value.slice(lineStart,start),indent=(before.match(/^[ \t]*/)||[''])[0];
+    const extra=!before.trimStart().startsWith('#')&&before.split('#')[0].trimEnd().endsWith(':')?'    ':'';
+    const inserted='\n'+indent+extra;
+    editor.setRangeText(inserted,start,end,'end');entryStats.typed_chars+=inserted.length;saveDraft();return;
+  }
   if(event.ctrlKey&&!event.altKey&&!event.metaKey&&(event.key==='#'||(event.shiftKey&&event.code==='Digit3'))){
     event.preventDefault();
     const editor=event.currentTarget,start=editor.selectionStart,end=editor.selectionEnd;
@@ -394,14 +430,14 @@ async function login(){
     const body={student_id:$('student-id').value.trim(),student_name:$('student-name').value.trim(),class_code:$('class-code').value.trim()};
     const response=await fetch('/api/student/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
     const result=await response.json();if(!response.ok)throw Error(result.error||'로그인 실패');
-    saveStudentIdentity();await showApp(result);
+    $('student-id').value='';$('student-name').value='';$('class-code').value='';await showApp(result);
   }catch(error){$('login-error').textContent=error.message}finally{$('login').disabled=false}
 }
 $('login').onclick=login;
 for(const id of ['student-id','student-name','class-code'])$(id).onkeydown=event=>{if(event.key==='Enter')login()};
 $('logout').onclick=async()=>{await fetch('/api/student/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});showLogin()};
 async function bootstrap(){
-  loadStudentIdentity();
+  clearSavedLogin();
   try{const response=await fetch('/api/student/me',{cache:'no-store'});if(!response.ok)throw Error();await showApp(await response.json())}
   catch{showLogin()}
 }

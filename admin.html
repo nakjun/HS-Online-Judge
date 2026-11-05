@@ -23,7 +23,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 <header><div><span class="eyebrow">HANSHIN UNIVERSITY · CLASSROOM</span><h1>관리자</h1></div><a href="/">문제 풀이로 돌아가기</a></header>
 <div class="admin-layout"><aside id="admin-sidebar" class="admin-sidebar" aria-label="관리자 메뉴" hidden><h2>관리자 메뉴</h2>
 <button type="button" data-tab="class-code">수업 코드 관리</button><button type="button" data-tab="students">학생 명단</button><button type="button" data-tab="progress">주차별 제출 현황</button><button type="button" data-tab="submissions">최근 제출</button><button type="button" data-tab="weeks">주차 추가</button><button type="button" data-tab="problems">문제 추가</button><button type="button" id="admin-logout">관리자 로그아웃</button></aside><main id="admin-pages" class="admin-pages">
-<div class="panel" id="admin-auth"><h2>관리자 로그인</h2><p class="note">관리자 토큰은 AS006입니다. 로그인 상태는 이 브라우저에 저장됩니다.</p><input id="token" type="password" autocomplete="off" placeholder="관리자 토큰"><button id="check" class="secondary">로그인</button></div>
+<div class="panel" id="admin-auth"><h2>관리자 로그인</h2><p class="note">관리자 토큰을 입력하세요. 로그인 정보는 브라우저 저장소에 저장하지 않습니다.</p><input id="token" type="password" autocomplete="off" placeholder="관리자 토큰"><button id="check" class="secondary">로그인</button></div>
 <div class="panel"><h2>수업 코드 관리</h2><p id="class-code-status" class="note">관리자 인증 후 현재 상태를 확인할 수 있습니다.</p><div class="row"><div><label for="new-class-code">새 수업 코드</label><input id="new-class-code" type="password" autocomplete="new-password" placeholder="영문·숫자 4~32자"></div><div><label for="confirm-class-code">새 수업 코드 확인</label><input id="confirm-class-code" type="password" autocomplete="new-password" placeholder="같은 코드를 다시 입력"></div></div><button id="save-class-code">수업 코드 저장</button><p class="note">코드를 바꾸면 기존 학생은 로그아웃되며 새 코드로 다시 로그인해야 합니다.</p></div>
 <div class="panel"><h2>학생 명단 가져오기</h2><p class="note">.xlsx 첫 행에 <strong>학번</strong>과 <strong>이름</strong> 열이 필요합니다. 기존 학번은 이름을 갱신하며, 파일에 없는 학생은 유지됩니다. 앞자리 0이 있는 학번은 엑셀에서 텍스트로 저장하세요.</p><input id="roster-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><button id="import-roster">엑셀 가져오기</button><button id="refresh-data" class="secondary">목록 새로고침</button><h3>등록된 학생</h3><div class="scroll"><table><thead><tr><th>학번</th><th>이름</th></tr></thead><tbody id="student-rows"></tbody></table></div></div>
 <div class="panel"><h2>주차별 제출 현황</h2><p class="note">선택한 주차의 제출 횟수와 정답 문제 수를 확인합니다. 학번·이름·제출수·정답수 제목을 누르면 정렬 방향을 바꿀 수 있습니다.</p><div class="row"><div><label for="progress-week">조회 주차</label><select id="progress-week"></select></div><div><label for="progress-query">학번 또는 이름 검색</label><input id="progress-query" placeholder="검색어"><button id="progress-search">검색</button></div></div><div class="scroll"><table><thead><tr id="progress-head"></tr></thead><tbody id="progress-rows"></tbody></table></div><div class="row"><div id="progress-count" class="note"></div><div style="text-align:right"><button id="progress-prev" class="secondary">이전</button> <button id="progress-next" class="secondary">다음</button></div></div><div id="progress-detail" class="progress-detail">상세 보기에서 문제별 상태를 확인하세요.</div></div>
@@ -39,7 +39,8 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 const $=id=>document.getElementById(id);
 const tabs=['class-code','students','progress','submissions','weeks','problems'];
 const pages=[...document.querySelectorAll('#admin-pages > .panel')];
-let adminToken=localStorage.getItem('judge.adminToken')||'';
+let adminToken='';
+for(const key of ['judge.adminToken','judge.studentId','judge.studentName']){try{localStorage.removeItem(key)}catch{}}
 function message(value){$('message').textContent=value}
 function showAuth(){adminToken='';localStorage.removeItem('judge.adminToken');$('admin-sidebar').hidden=true;pages.forEach((page,index)=>page.hidden=index!==0);$('token').value='';message('관리자 토큰을 입력하세요.')}
 function activateTab(tab){
@@ -158,7 +159,7 @@ async function refreshData(){
   fillSubmissions(submissions);
   return students.length;
 }
-$('check').onclick=async()=>{try{await request('/api/admin/class-code');adminToken=$('token').value;localStorage.setItem('judge.adminToken',adminToken);await showAdmin()}catch(e){message(e.message)}};
+$('check').onclick=async()=>{try{await request('/api/admin/class-code');adminToken=$('token').value;$('token').value='';await showAdmin()}catch(e){message(e.message)}};
 $('token').onkeydown=event=>{if(event.key==='Enter')$('check').click()};
 for(const button of document.querySelectorAll('[data-tab]'))button.onclick=()=>activateTab(button.dataset.tab);
 $('admin-logout').onclick=showAuth;
