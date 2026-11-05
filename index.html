@@ -34,11 +34,12 @@
   <div id="app-shell" hidden>
   <div class="grid">
     <aside>
-      <div class="panel"><h2>문제 <button id="refresh-problems" style="float:right;padding:6px 10px;font-size:12px">목록 새로고침</button></h2><p id="problem-load-status" class="muted" role="status"></p><label for="week">주차</label><select id="week"></select><label for="problem">문제 선택</label><select id="problem"></select><div id="problem-list" class="problem-list"></div><div id="description"></div></div>
+      <div class="panel"><h2>문제 <button id="refresh-problems" style="float:right;padding:6px 10px;font-size:12px">목록 새로고침</button></h2><p id="problem-load-status" class="muted" role="status"></p><label for="week">주차</label><select id="week"></select><label for="problem">문제 선택</label><select id="problem"></select><div id="problem-list" class="problem-list"></div></div>
       <div class="panel"><h2>학습 현황</h2><p id="week-progress" class="muted">주차를 선택하세요.</p></div>
     </aside>
     <main>
       <div class="panel student-banner"><div><span class="eyebrow">SIGNED IN</span><h2 id="student-label">학생</h2></div><button id="logout" class="secondary">로그아웃</button></div>
+      <section class="panel problem-statement" aria-labelledby="problem-title"><h2 id="problem-title">문제를 선택하세요.</h2><div id="description"></div></section>
       <div class="panel"><h2>Python 3 코드</h2><label for="code-file">.py 파일 선택</label><input id="code-file" type="file" accept=".py,text/x-python"><p class="muted">파일을 선택하면 아래 편집기에 코드가 표시됩니다.</p><textarea id="code" spellcheck="false">a, b = map(int, input().split())
 print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 또는 선택한 줄의 주석 전환. 코드는 학생·문제별로 이 브라우저에 자동 저장됩니다.</p><p id="code-save-status" class="muted" role="status"></p><button id="restore-accepted" class="secondary" disabled>정답 코드 복원</button><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
       <p class="muted">문제를 열어 둔 동안의 탭 숨김·창 포커스 이탈 횟수와 시간이 제출 시 관리자에게 전달됩니다.</p><p id="attention-status" class="muted" role="status"></p>
@@ -149,6 +150,66 @@ function rememberAccepted(studentId,problemId,code,submissionId){
 function notePaste(value){entryStats.pasted_chars+=value.length;entryStats.largest_paste_chars=Math.max(entryStats.largest_paste_chars,value.length)}
 function saveStudentIdentity(){localStorage.setItem('judge.studentId',$('student-id').value.trim());localStorage.setItem('judge.studentName',$('student-name').value.trim())}
 function loadStudentIdentity(){$('student-id').value=localStorage.getItem('judge.studentId')||'';$('student-name').value=localStorage.getItem('judge.studentName')||''}
+function appendProblemInline(node,text){
+  const pattern=/\b(?:[A-Za-z_][A-Za-z0-9_]*\([^()\n]*\)|True|False|VALID|INVALID)/g;
+  let end=0;
+  for(const match of text.matchAll(pattern)){
+    node.append(document.createTextNode(text.slice(end,match.index)));
+    const code=document.createElement('code');code.textContent=match[0];node.append(code);end=match.index+match[0].length;
+  }
+  node.append(document.createTextNode(text.slice(end)));
+}
+function problemSection(parent,title){
+  const section=document.createElement('section'),heading=document.createElement('h3');
+  heading.textContent=title;section.className='problem-section';section.append(heading);parent.append(section);return section;
+}
+function appendProblemBody(parent,text,requirements=false){
+  const lines=text.split('\n').filter(line=>line.trim());
+  const numbered=lines.length>0&&lines.every(line=>/^\d+\.\s/.test(line));
+  const bulleted=lines.length>0&&lines.every(line=>/^[-•]\s/.test(line));
+  const sentences=requirements?text.split(/(?<=\.)\s+/).filter(Boolean):lines;
+  if(numbered||bulleted||(requirements&&sentences.length>1)){
+    const list=document.createElement(numbered?'ol':'ul');
+    for(const line of numbered||bulleted?lines:sentences){const item=document.createElement('li');appendProblemInline(item,line.replace(numbered?/^\d+\.\s/:bulleted?/^[-•]\s/:/^$/,''));list.append(item)}
+    parent.append(list);
+  }else{const paragraph=document.createElement('p');paragraph.className='problem-prose';appendProblemInline(paragraph,text);parent.append(paragraph)}
+}
+function samplePre(text,kind){
+  const pre=document.createElement('pre');pre.className=kind;
+  if(kind!=='sample-input'){pre.textContent=text;return pre}
+  const lines=text.split('\n');
+  lines.forEach((line,index)=>{
+    let end=0;
+    for(const match of line.matchAll(/^ +| +$/g)){
+      pre.append(document.createTextNode(line.slice(end,match.index)));
+      const space=document.createElement('span');space.className='sample-space';space.textContent=match[0];space.title='공백 '+match[0].length+'개';pre.append(space);end=match.index+match[0].length;
+    }
+    pre.append(document.createTextNode(line.slice(end)+(index<lines.length-1?'\n':'')));
+  });
+  return pre;
+}
+function renderStatement(problem){
+  $('problem-title').textContent=problem.title;
+  const root=$('description');root.replaceChildren();
+  let section=problemSection(root,'문제');
+  for(const block of problem.description.split(/\n\s*\n/)){
+    const named=block.match(/^(구현 조건|제출 안내|학습 목표|학습 포인트):\s*([\s\S]*)$/);
+    if(named){section=problemSection(root,named[1]);appendProblemBody(section,named[2],named[1]!=='제출 안내')}
+    else appendProblemBody(section,block);
+  }
+  const io=document.createElement('div');io.className='problem-io';root.append(io);
+  appendProblemBody(problemSection(io,'입력'),problem.input,true);
+  appendProblemBody(problemSection(io,'출력'),problem.output,true);
+  const examples=problemSection(root,'입출력 예제');
+  problem.samples.forEach((sample,index)=>{
+    const group=document.createElement('div');group.className='sample-group';examples.append(group);
+    const suffix=problem.samples.length>1?' '+(index+1):'';
+    for(const [title,text,kind] of [['예제 입력'+suffix,sample.input,'sample-input'],['예제 출력'+suffix,sample.output,'sample-output']]){
+      const column=document.createElement('div'),heading=document.createElement('h4');heading.textContent=title;column.append(heading,samplePre(text,kind));group.append(column);
+    }
+    if(sample.input.split('\n').some(line=>/^ | $/.test(line))){const note=document.createElement('p');note.className='sample-space-note';note.textContent='색으로 표시된 부분은 앞뒤 공백입니다. 공백도 입력에 포함됩니다.';examples.append(note)}
+  });
+}
 function renderProblem(preferAccepted=false){
   saveDraft();
   const p=problems.find(item=>item.id===$('problem').value);
@@ -168,16 +229,7 @@ function renderProblem(preferAccepted=false){
   }
   updateCodeStatus();
   for(const button of $('problem-list').querySelectorAll('button'))button.classList.toggle('selected',button.dataset.id===p.id);
-  $('description').replaceChildren();
-  const sampleFields=p.samples.flatMap((sample,index)=>{
-    const suffix=p.samples.length>1?' '+(index+1):'';
-    return [['예제 입력'+suffix,sample.input],['예제 출력'+suffix,sample.output]];
-  });
-  for(const [title,value] of [['설명',p.description],['입력',p.input],['출력',p.output],...sampleFields]){
-    const heading=document.createElement('label');heading.textContent=title;
-    const content=document.createElement(title.startsWith('예제')?'pre':'p');content.textContent=value;
-    $('description').append(heading,content);
-  }
+  renderStatement(p);
   $('stdin').value=p.samples[0].input;
 }
 function renderWeek(preferredProblem=$('problem').value){
@@ -189,7 +241,7 @@ function renderWeek(preferredProblem=$('problem').value){
   if(selected.some(p=>p.id===preferredProblem))$('problem').value=preferredProblem;
   $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem(true)};return button}));
   $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
-  if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
+  if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('problem-title').textContent='등록된 문제 없음';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
 }
 async function problemData(path,label){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);

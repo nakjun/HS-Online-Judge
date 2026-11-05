@@ -92,7 +92,7 @@
   {
     "id": "week-10-word-middle",
     "week_id": "week-10",
-    "title": "단어의 가운데 추출하기 — Lv1",
+    "title": "문제 1. 단어의 가운데 추출하기 — Lv1",
     "description": "단어 하나를 입력받아, 양 끝의 문자를 제외한 나머지 부분을 출력하시오.\n\n학습 목표: 문자열 인덱스와 슬라이싱을 활용함.",
     "input": "길이가 3 이상 30 이하인 영문 단어가 주어짐.",
     "output": "첫 번째 문자와 마지막 문자를 제외한 문자열을 출력함.",
@@ -112,7 +112,7 @@
   {
     "id": "week-10-clean-username",
     "week_id": "week-10",
-    "title": "사용자 이름 정리하기 — Lv1",
+    "title": "문제 2. 사용자 이름 정리하기 — Lv1",
     "description": "사용자 이름을 입력받아 앞뒤 공백을 제거하고, 모든 영문자를 소문자로 바꾸어 출력하시오. 이름 중간의 공백은 유지하시오.\n\n학습 목표: strip(), lower()의 반환값을 활용함.",
     "input": "앞뒤 공백을 포함할 수 있는 문자열 한 줄이 주어짐. 문자열은 영문과 일반 공백으로 구성되며, 영문자가 하나 이상 포함됨.",
     "output": "앞뒤 공백을 제거하고 영문을 소문자로 변환한 결과를 출력함.",
@@ -133,7 +133,7 @@
   {
     "id": "week-10-add-separator",
     "week_id": "week-10",
-    "title": "문자 사이에 구분자 넣기 — Lv2",
+    "title": "문제 3. 문자 사이에 구분자 넣기 — Lv2",
     "description": "단어를 전달받아 각 문자 사이에 하이픈(-)을 넣은 문자열을 반환하는 함수 add_separator(text)를 작성하시오.\n\n구현 조건: 함수 내부에서 반복문을 사용함. join()은 사용하지 않음.\n\n제출 안내: 함수를 정의한 뒤, 표준 입력으로 단어를 읽어 함수를 호출하고 반환된 문자열을 출력하시오.\n\n학습 목표: 반복문으로 문자열을 누적하고, 마지막 구분자가 남지 않도록 구성함.",
     "input": "길이가 1 이상 30 이하인 영문 단어가 주어짐.",
     "output": "각 문자 사이에 하이픈을 넣은 결과를 출력함. 첫 문자 앞과 마지막 문자 뒤에는 하이픈을 넣지 않음.",
@@ -151,30 +151,9 @@
     ]
   },
   {
-    "id": "week-10-password-rules",
-    "week_id": "week-10",
-    "title": "비밀번호 규칙 검사하기 — Lv3",
-    "description": "문자열을 전달받아 다음 조건을 모두 만족하면 True, 하나라도 만족하지 못하면 False를 반환하는 함수 is_valid_password(password)를 작성하시오.\n\n1. 길이가 8 이상 20 이하이어야 함.\n2. 영문 대문자가 하나 이상 포함되어야 함.\n3. 영문 소문자가 하나 이상 포함되어야 함.\n4. 숫자가 하나 이상 포함되어야 함.\n5. 특수문자 !, @, # 중 하나 이상이 포함되어야 함.\n6. 영문 대소문자, 숫자, !, @, # 이외의 문자는 포함할 수 없음.\n\n구현 조건: 함수 내부에서 반복문과 조건문으로 문자를 검사함. 정규표현식은 사용하지 않음. 입력된 비밀번호의 공백을 임의로 제거하지 않음.\n\n제출 안내: 함수를 정의한 뒤, 표준 입력으로 N과 비밀번호 N개를 읽고 각 비밀번호를 함수에 전달하시오. 반환값이 True이면 VALID, False이면 INVALID를 출력하시오.\n\n예제의 마지막 비밀번호에는 ! 뒤에 공백이 있으므로 허용되지 않는 문자가 포함된 경우임.\n\n학습 목표: 문자별 조건 검사, 조건 충족 여부 저장, 함수의 논리값 반환을 결합함.",
-    "input": "첫 번째 줄에 검사할 비밀번호 수 N이 주어짐 (1 ≤ N ≤ 20). 다음 N개의 줄에 비밀번호가 하나씩 주어짐. 각 비밀번호의 길이는 1 이상 50 이하임. 입력 문자열에는 공백이 포함될 수 있음.",
-    "output": "각 비밀번호가 조건을 만족하면 VALID, 그렇지 않으면 INVALID를 한 줄씩 출력함.",
-    "samples": [
-      {"input": "5\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\n"}
-    ],
-    "tests": [
-      {"input": "5\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\n"},
-      {"input": "6\nAa1!aaa\nAa1!aaaa\nAa1!aaaaaaaaaaaaaaaa\nAa1!aaaaaaaaaaaaaaaaa\nA\nAa1!aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n", "output": "INVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\n"},
-      {"input": "5\naaaaaa1!\nAAAAAA1!\nAaaaaaa!\nAaaaaa12\nAa1!aaaa\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\nVALID\n"},
-      {"input": "5\nPython1!\nPython1@\nPython1#\n!@#1aABC\n1!aaaaaA\n", "output": "VALID\nVALID\nVALID\nVALID\nVALID\n"},
-      {"input": "8\n Python1!\nPython1! \nPyth on1!\nPython1!  \n        \nPython1!$\nPython1!_\nPython1!.\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\n"},
-      {"input": "4\nPython1!/\nPython1!-\nPython1!+\nPython1!?\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\n"},
-      {"input": "1\nAa1!aaaa\n", "output": "VALID\n"},
-      {"input": "20\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \nAa1!aaa\nAa1!aaaa\nPython1@\nPython1#\nAaaaaaa!\nAaaaaa12\n Python1!\nPyth on1!\nPython1!$\n!@#1aABC\n1!aaaaaA\nA\n        \nPython1!_\nAa1!aaaaaaaaaaaaaaaa\n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nVALID\n"}
-    ]
-  },
-  {
     "id": "week-10-file-extension",
     "week_id": "week-10",
-    "title": "파일 확장자 추출하기 — 쉬움(Lv1)",
+    "title": "문제 4. 파일 확장자 추출하기 — Lv1",
     "description": "파일 이름을 입력받아 확장자를 소문자로 출력하시오. 확장자는 마지막 마침표(.) 뒤의 문자열을 의미함.\n\n학습 포인트: split(\".\")으로 문자열을 나눔. 음수 인덱스로 마지막 요소에 접근함. lower()로 대소문자를 통일함.",
     "input": "파일 이름 한 줄이 주어짐. 파일 이름에는 마침표가 하나 이상 포함됨. 마지막 문자는 마침표가 아니며, 공백은 포함되지 않음. 문자열 길이는 3 이상 100 이하임.",
     "output": "파일 확장자를 소문자로 출력함.",
@@ -216,9 +195,78 @@
     ]
   },
   {
+    "id": "week-10-make-abbreviation",
+    "week_id": "week-10",
+    "title": "문제 5. 단어의 첫 글자로 약어 만들기 — Lv2",
+    "description": "여러 단어로 이루어진 문장을 입력받아, 각 단어의 첫 글자를 대문자로 연결한 약어를 출력하시오.\n\n문자열을 전달받아 약어를 반환하는 함수 make_abbreviation(text)를 작성하시오.\n\n구현 조건:\n- split()으로 문장을 단어 단위로 나눔\n- 반복문으로 각 단어의 첫 글자를 추출하여 연결함\n- upper()로 대문자로 변환함\n- 입력과 출력은 함수 밖에서 처리함\n\n제출 안내: 함수를 정의한 뒤, 함수 밖에서 표준 입력으로 문장을 읽어 함수를 호출하고 반환된 약어를 출력하시오.",
+    "input": "영문과 공백으로 구성된 문장 한 줄이 주어짐. 단어는 하나 이상이며, 문자열의 길이는 1 이상 100 이하임. 단어 사이에 여러 개의 공백이 있거나 문장 앞뒤에 공백이 있을 수 있음.",
+    "output": "각 단어의 첫 글자를 대문자로 연결하여 출력함.",
+    "samples": [
+      {
+        "input": "Artificial Intelligence\n",
+        "output": "AI\n"
+      },
+      {
+        "input": "  too   much information  \n",
+        "output": "TMI\n"
+      }
+    ],
+    "tests": [
+      {
+        "input": "Artificial Intelligence\n",
+        "output": "AI\n"
+      },
+      {
+        "input": "  too   much information  \n",
+        "output": "TMI\n"
+      },
+      {
+        "input": "x\n",
+        "output": "X\n"
+      },
+      {
+        "input": "pYtHoN\n",
+        "output": "P\n"
+      },
+      {
+        "input": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz\n",
+        "output": "Z\n"
+      },
+      {
+        "input": "a B c D e F\n",
+        "output": "ABCDEF\n"
+      },
+      {
+        "input": "a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a \n",
+        "output": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+      }
+    ]
+  },
+  {
+    "id": "week-10-password-rules",
+    "week_id": "week-10",
+    "title": "문제 6. 비밀번호 규칙 검사하기 — Lv3",
+    "description": "문자열을 전달받아 다음 조건을 모두 만족하면 True, 하나라도 만족하지 못하면 False를 반환하는 함수 is_valid_password(password)를 작성하시오.\n\n1. 길이가 8 이상 20 이하이어야 함.\n2. 영문 대문자가 하나 이상 포함되어야 함.\n3. 영문 소문자가 하나 이상 포함되어야 함.\n4. 숫자가 하나 이상 포함되어야 함.\n5. 특수문자 !, @, # 중 하나 이상이 포함되어야 함.\n6. 영문 대소문자, 숫자, !, @, # 이외의 문자는 포함할 수 없음.\n\n구현 조건: 함수 내부에서 반복문과 조건문으로 문자를 검사함. 정규표현식은 사용하지 않음. 입력된 비밀번호의 공백을 임의로 제거하지 않음.\n\n제출 안내: 함수를 정의한 뒤, 표준 입력으로 N과 비밀번호 N개를 읽고 각 비밀번호를 함수에 전달하시오. 반환값이 True이면 VALID, False이면 INVALID를 출력하시오.\n\n예제의 마지막 비밀번호에는 ! 뒤에 공백이 있으므로 허용되지 않는 문자가 포함된 경우임.\n\n학습 목표: 문자별 조건 검사, 조건 충족 여부 저장, 함수의 논리값 반환을 결합함.",
+    "input": "첫 번째 줄에 검사할 비밀번호 수 N이 주어짐 (1 ≤ N ≤ 20). 다음 N개의 줄에 비밀번호가 하나씩 주어짐. 각 비밀번호의 길이는 1 이상 50 이하임. 입력 문자열에는 공백이 포함될 수 있음.",
+    "output": "각 비밀번호가 조건을 만족하면 VALID, 그렇지 않으면 INVALID를 한 줄씩 출력함.",
+    "samples": [
+      {"input": "5\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\n"}
+    ],
+    "tests": [
+      {"input": "5\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\n"},
+      {"input": "6\nAa1!aaa\nAa1!aaaa\nAa1!aaaaaaaaaaaaaaaa\nAa1!aaaaaaaaaaaaaaaaa\nA\nAa1!aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n", "output": "INVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\n"},
+      {"input": "5\naaaaaa1!\nAAAAAA1!\nAaaaaaa!\nAaaaaa12\nAa1!aaaa\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\nVALID\n"},
+      {"input": "5\nPython1!\nPython1@\nPython1#\n!@#1aABC\n1!aaaaaA\n", "output": "VALID\nVALID\nVALID\nVALID\nVALID\n"},
+      {"input": "8\n Python1!\nPython1! \nPyth on1!\nPython1!  \n        \nPython1!$\nPython1!_\nPython1!.\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\n"},
+      {"input": "4\nPython1!/\nPython1!-\nPython1!+\nPython1!?\n", "output": "INVALID\nINVALID\nINVALID\nINVALID\n"},
+      {"input": "1\nAa1!aaaa\n", "output": "VALID\n"},
+      {"input": "20\nPython1!\npython1!\nPYTHON1!\nPython12\nPython1! \nAa1!aaa\nAa1!aaaa\nPython1@\nPython1#\nAaaaaaa!\nAaaaaa12\n Python1!\nPyth on1!\nPython1!$\n!@#1aABC\n1!aaaaaA\nA\n        \nPython1!_\nAa1!aaaaaaaaaaaaaaaa\n", "output": "VALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nINVALID\nINVALID\nVALID\nVALID\nINVALID\nINVALID\nINVALID\nVALID\n"}
+    ]
+  },
+  {
     "id": "week-10-compress-text",
     "week_id": "week-10",
-    "title": "연속된 문자 압축하기 — 어려움(Lv3)",
+    "title": "문제 7. 연속된 문자 압축하기 — Lv3",
     "description": "문자열에서 같은 문자가 연속으로 등장하는 구간을 문자와 등장 횟수로 압축하시오. 문자열을 전달받아 압축 결과를 반환하는 함수 compress_text(text)를 작성하시오.\n\n같은 문자가 연속되면 하나의 구간으로 처리함. 한 번만 등장한 문자도 횟수 1을 붙임. 같은 문자라도 떨어져 있으면 서로 다른 구간으로 처리함. 예를 들어 AAABBACCCC는 A3B2A1C4로 압축함.\n\n구현 조건: 함수 내부에서 반복문과 조건문을 사용함. count()와 외부 라이브러리는 사용하지 않음. 등장 횟수는 str()로 변환하여 결과 문자열에 연결할 수 있음. 입력과 출력은 함수 밖에서 처리함.\n\n제출 안내: 함수를 정의한 뒤, 함수 밖에서 표준 입력으로 문자열을 읽어 함수를 호출하고 반환된 압축 문자열을 출력하시오.",
     "input": "길이가 1 이상 100 이하인 영문 대문자 문자열이 주어짐.",
     "output": "압축한 문자열을 출력함.",

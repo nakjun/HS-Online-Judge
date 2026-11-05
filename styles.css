@@ -35,6 +35,7 @@ h2 { color: var(--hs-ink); font-size: 18px; letter-spacing: -.025em; }
 h3 { color: var(--hs-ink); }
 .eyebrow { display: block; color: var(--hs-violet); font-weight: 900; font-size: 11px; letter-spacing: .13em; margin-bottom: 6px; }
 .grid { grid-template-columns: 315px minmax(0, 1fr); gap: 20px; }
+.grid > aside, .grid > main { min-width: 0; }
 .panel { background: var(--hs-surface); border: 1px solid var(--hs-border); border-radius: 12px; box-shadow: 0 3px 16px rgba(37, 24, 53, .045); padding: 22px; }
 label { color: #4a4353; font-weight: 700; }
 input, select, textarea { background: #fff; border: 1px solid #cfc8d9; color: var(--hs-ink); border-radius: 7px; }
@@ -70,9 +71,33 @@ th, td { border-bottom: 1px solid var(--hs-border); }
 .progress-detail { margin-top: 14px; padding: 14px; border: 1px solid var(--hs-border); border-radius: 8px; background: #fbfafd; }
 button.progress-sort { margin: 0; padding: 4px 2px; background: transparent; color: var(--hs-violet-dark); white-space: nowrap; }
 button.progress-sort:hover { background: var(--hs-violet-soft); }
+.problem-statement { font-size: 16px; line-height: 1.8; }
+.problem-statement h2 { margin: 0 0 22px; padding-bottom: 16px; border-bottom: 1px solid var(--hs-border); font-size: 22px; line-height: 1.5; overflow-wrap: anywhere; }
+.problem-section { margin: 0 0 24px; }
+.problem-section:last-child { margin-bottom: 0; }
+.problem-section h3 { margin: 0 0 9px; font-size: 16px; line-height: 1.5; color: var(--hs-violet-dark); }
+.problem-section p { margin: 0 0 12px; color: var(--hs-ink); }
+.problem-prose { white-space: pre-line; overflow-wrap: anywhere; }
+.problem-section ul, .problem-section ol { margin: 0; padding-left: 24px; }
+.problem-section li { padding-left: 3px; margin: 5px 0; overflow-wrap: anywhere; }
+.problem-section code { padding: 1px 4px; border-radius: 4px; background: #f2eff6; font-size: .9em; font-family: Consolas, ui-monospace, monospace; overflow-wrap: anywhere; }
+.problem-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.sample-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.sample-group > div { min-width: 0; }
+.sample-group h4 { margin: 0 0 6px; font-size: 14px; color: var(--hs-muted); }
+.sample-group pre { margin: 0; padding: 14px; font-size: 14px; line-height: 1.7; font-family: Consolas, ui-monospace, monospace; white-space: pre; word-break: normal; overflow-x: auto; }
+.sample-space { background: #dbcbe9; box-shadow: inset 0 -2px #9675b6; }
+.problem-section .sample-space-note { font-size: 13px; color: var(--hs-muted); margin-top: 8px; }
+@media (min-width: 761px) and (max-width: 1000px) {
+  .grid { grid-template-columns: 1fr; }
+  .grid > aside { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; align-items: start; }
+}
 @media (max-width: 760px) {
   .wrap { padding: 18px 12px 36px; }
   .brand-strip-inner { padding: 9px 12px; }
   .grid { grid-template-columns: 1fr; }
   header h1 { font-size: 23px; }
+  .problem-statement h2 { font-size: 20px; }
+  .problem-io, .sample-group { grid-template-columns: 1fr; gap: 16px; }
+  .brand-strip-inner { letter-spacing: .04em; font-size: 9px; }
 }
