@@ -23,7 +23,7 @@ DATA_LOCK = threading.RLock()
 SLOTS = threading.BoundedSemaphore(2)
 ALLOWED_SUBNETS = [ipaddress.ip_network(item.strip(), strict=False) for item in os.environ.get("JUDGE_ALLOWED_SUBNETS", "").split(",") if item.strip()]
 HOST = os.environ.get("JUDGE_HOST", "127.0.0.1")
-PORT = int(os.environ.get("JUDGE_PORT", "8000"))
+PORT = int(os.environ.get("JUDGE_PORT", "18000"))
 
 
 init_db()

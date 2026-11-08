@@ -106,30 +106,31 @@ try {
     Write-Host '[4/4] 설치 확인'
     & $venvPython (Join-Path $PSScriptRoot 'verify-install.py')
     if ($LASTEXITCODE -ne 0) { throw '채점 컨테이너 실행 확인에 실패했습니다.' }
+    & (Join-Path $PSScriptRoot 'register-autostart.ps1')
     if ($SetupOnly) { Write-Host '설치 확인 완료.'; exit 0 }
 
-    $url = 'http://127.0.0.1:8000/'
+    $url = 'http://127.0.0.1:18000/'
     $running = $false
     try {
         $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
         $running = $response.StatusCode -eq 200 -and $response.Content.Contains('<title>Python Judge</title>')
     } catch { }
-    $listener = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
-    if ($listener -and -not $running) { throw '8000 포트를 다른 프로그램이 사용 중입니다.' }
+    $listener = Get-NetTCPConnection -LocalPort 18000 -State Listen -ErrorAction SilentlyContinue
+    if ($listener -and -not $running) { throw '18000 포트를 다른 프로그램이 사용 중입니다.' }
+    $pythonw = Join-Path $PSScriptRoot '.venv\Scripts\pythonw.exe'
+    Start-Process -FilePath $pythonw -ArgumentList ('"' + (Join-Path $PSScriptRoot 'autostart.py') + '"') -WorkingDirectory $PSScriptRoot -WindowStyle Hidden | Out-Null
     if (-not $running) {
         $runtime = Join-Path $PSScriptRoot 'runtime'
         New-Item -ItemType Directory -Path $runtime -Force | Out-Null
-        $launcher = Start-Process -FilePath 'powershell.exe' -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + (Join-Path $PSScriptRoot 'start-lan.ps1') + '"')) -WorkingDirectory $PSScriptRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runtime 'server.out.log') -RedirectStandardError (Join-Path $runtime 'server.err.log') -PassThru
         $ready = $false
-        for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        for ($attempt = 0; $attempt -lt 60; $attempt++) {
             Start-Sleep -Seconds 1
             try {
                 $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
                 if ($response.StatusCode -eq 200 -and $response.Content.Contains('<title>Python Judge</title>')) { $ready = $true; break }
             } catch { }
-            if ($launcher.HasExited) { break }
         }
-        if (-not $ready) { throw "서버 시작에 실패했습니다. $(Join-Path $runtime 'server.err.log') 내용을 확인하세요." }
+        if (-not $ready) { throw "서버 시작을 기다리고 있습니다. $(Join-Path $runtime 'autostart.log') 및 server.err.log 내용을 확인하세요. 자동 실행은 계속 재시도합니다." }
     }
     Write-Host "Python Judge: $url"
     if (-not $NoBrowser) { Start-Process $url | Out-Null }

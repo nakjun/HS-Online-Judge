@@ -4,13 +4,17 @@ Python 코드 직접 실행과 예제 문제 채점을 지원하는 작은 웹�
 
 ## 원클릭 설치 및 실행 (Windows)
 
+설치가 성공하면 현재 Windows 사용자의 시작프로그램에 **HS Online Judge**가 등록됩니다. 이후 Windows 로그인 시 Docker Desktop과 프론트엔드·백엔드 공용 서버가 **18000번 포트**에서 자동으로 실행됩니다. 로그인 전에는 실행되지 않습니다. 설치 폴더를 이동하면 `install.cmd`를 다시 실행해 등록 경로를 갱신하세요.
+
+자동 실행 감시 프로그램은 15초 간격으로 Docker와 서버 상태를 확인합니다. 서버가 종료되면 다시 시작하며, 네트워크 주소가 바뀌면 자신이 실행한 서버를 새 LAN 대역으로 다시 띄웁니다. 네트워크 연결이 없으면 우선 로컬 주소에서 시작합니다. 진단 로그는 `runtime/autostart.log`에 기록됩니다. 자동 시작을 해제하려면 `Win+R`에서 `shell:startup`을 열어 `HS Online Judge` 바로가기를 삭제하세요. 이미 실행 중인 감시 프로그램은 다음 로그아웃 시 종료됩니다.
+
 저장소를 ZIP으로 내려받아 압축을 푼 뒤 **`install.cmd`를 더블클릭**합니다. 스크립트는 Python 3.10 이상과 Docker Desktop을 확인하고, 없으면 `winget`으로 설치합니다. 이어 `.venv`에 Python 패키지를 설치하고 채점용 Docker 이미지를 준비한 뒤 실제 코드 실행을 검사합니다. 성공하면 LAN 서버를 시작하고 브라우저를 엽니다. 같은 스크립트를 다시 실행해도 기존 서버가 있으면 그대로 사용합니다.
 
-처음 Docker Desktop을 설치한 경우 초기 설정이나 WSL 2 설치, Windows 재시작이 필요할 수 있습니다. 이 단계가 요청되면 완료한 뒤 `install.cmd`를 다시 실행하세요. 같은 LAN의 다른 기기에서 접속이 안 되면 Windows 개인 네트워크 방화벽에서 TCP 8000번 포트를 로컬 서브넷에 허용해야 합니다. 서버 출력과 오류는 `runtime/`에 저장됩니다.
+처음 Docker Desktop을 설치한 경우 초기 설정이나 WSL 2 설치, Windows 재시작이 필요할 수 있습니다. 이 단계가 요청되면 완료한 뒤 `install.cmd`를 다시 실행하세요. 같은 LAN의 다른 기기에서 접속이 안 되면 Windows 개인 네트워크 방화벽에서 TCP 18000번 포트를 로컬 서브넷에 허용해야 합니다. 서버 출력과 오류는 `runtime/`에 저장됩니다.
 
 Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Desktop 창을 열어 초기 설정을 마친 뒤 다시 실행하세요. 설치 스크립트가 Docker Desktop 창을 표시하고 엔진을 기다리도록 되어 있습니다. 계속 실패하면 설치 창에 표시된 전체 오류 문구와 Docker Desktop 설치 여부를 확인해야 합니다.
 
-수동 실행은 Docker Desktop Linux 엔진을 켠 뒤 `python -m pip install -r requirements.txt`, `docker pull python:3.13-alpine`, `python server.py` 순서로 진행합니다. 기본 주소는 <http://127.0.0.1:8000>입니다.
+수동 실행은 Docker Desktop Linux 엔진을 켠 뒤 `python -m pip install -r requirements.txt`, `docker pull python:3.13-alpine`, `python server.py` 순서로 진행합니다. 기본 주소는 <http://127.0.0.1:18000>입니다.
 
 설치 후 평소에는 **`run.cmd`를 더블클릭**하거나 `powershell -ExecutionPolicy Bypass -File .\run.ps1`로 실행합니다. 패키지를 다시 설치하지 않고 Docker 상태·채점 이미지를 확인한 뒤 LAN 서버를 실행합니다. 이미 실행 중이면 기존 서버를 사용합니다. `-NoBrowser`는 브라우저 자동 열기를 끄고, `-LocalOnly`는 이 PC에서만 접속하도록 새 서버를 시작하며, `-Port 8001`로 포트를 지정할 수 있습니다.
 
@@ -20,7 +24,7 @@ Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Deskto
 
 ## 관리자 화면
 
-<http://127.0.0.1:8000/admin>에서 주차와 문제를 추가할 수 있습니다. 관리자 토큰은 `AS006`으로 고정되어 있습니다.
+<http://127.0.0.1:18000/admin>에서 주차와 문제를 추가할 수 있습니다. 관리자 토큰은 `AS006`으로 고정되어 있습니다.
 
 관리자 화면은 왼쪽 메뉴에서 수업 코드, 학생 명단, 제출 현황, 최근 제출, 주차, 문제를 각각 열 수 있습니다. 관리자 인증값은 페이지 메모리에서만 사용하며 새로고침하면 다시 로그인합니다. 공용 PC에서는 **관리자 로그아웃**을 누르세요.
 
@@ -56,7 +60,7 @@ Docker 확인 단계에서 `cannot find registry key`가 보이면 Docker Deskto
 
 ## 접속 설정
 
-기본 주소는 `127.0.0.1:8000`으로 이 PC에서만 접속됩니다. 다른 기기에서 접속하려면 PowerShell에서 다음처럼 설정한 뒤 서버를 시작합니다.
+기본 주소는 `127.0.0.1:18000`으로 이 PC에서만 접속됩니다. 다른 기기에서 접속하려면 PowerShell에서 다음처럼 설정한 뒤 서버를 시작합니다.
 
 ```powershell
 $env:JUDGE_HOST = '0.0.0.0'
@@ -66,7 +70,7 @@ python server.py
 
 `JUDGE_ALLOWED_SUBNETS`를 실제 내부망 대역으로 바꾸세요. 학생은 로그인 화면에서 수업 코드를 입력합니다. 인터넷에 공개하려면 HTTPS를 제공하는 인증 프록시 또는 VPN 뒤에 두세요. 이 앱은 교육용 소규모 사용을 위한 것이며, Docker 자원 제한만으로 강한 다중 사용자 격리를 보장하지 않습니다.
 
-같은 Wi-Fi/LAN에서만 접속시키려면 `powershell -File .\start-lan.ps1`로 시작합니다. 이 스크립트는 Wi-Fi 대역을 계산해 해당 대역과 로컬 PC에서만 응답합니다. 다른 기기에서는 `http://<이 PC의 Wi-Fi IP>:8000`으로 접속합니다. Wi-Fi IP가 바뀌면 서버를 다시 시작하세요.
+같은 Wi-Fi/LAN에서만 접속시키려면 `powershell -File .\start-lan.ps1`로 시작합니다. 이 스크립트는 Wi-Fi 대역을 계산해 해당 대역과 로컬 PC에서만 응답합니다. 다른 기기에서는 `http://<이 PC의 Wi-Fi IP>:18000`으로 접속합니다. Wi-Fi IP가 바뀌면 서버를 다시 시작하세요.
 
 ## API
 

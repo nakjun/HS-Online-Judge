@@ -15,9 +15,10 @@ if (-not $address) {
 }
 
 $env:JUDGE_HOST = '0.0.0.0'
+$env:JUDGE_PORT = '18000'
 $env:JUDGE_ALLOWED_SUBNETS = & $python -c "import ipaddress,sys; print(ipaddress.ip_interface(sys.argv[1]).network)" "$($address.IPAddress)/$($address.PrefixLength)"
 if ($LASTEXITCODE -ne 0) { throw 'LAN 대역을 계산하지 못했습니다.' }
-Write-Host "Python Judge LAN: http://$($address.IPAddress):8000"
+Write-Host "Python Judge LAN: http://$($address.IPAddress):18000"
 Write-Host "허용된 대역: $env:JUDGE_ALLOWED_SUBNETS"
 & $python server.py
 exit $LASTEXITCODE
