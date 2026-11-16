@@ -15,6 +15,9 @@
     .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}pre{white-space:pre-wrap;word-break:break-word;background:#111620;border-radius:9px;padding:13px;min-height:50px;overflow:auto}
     .badge{display:inline-block;padding:5px 9px;border-radius:7px;background:#33425d;margin-bottom:8px}.good{background:#164d3a;color:#aaf2ce}.bad{background:#683239;color:#ffd0d3}
     .problem-list{display:grid;gap:7px;margin:12px 0}.problem-list button{width:100%;text-align:left;background:#293346;border:1px solid #42516a;padding:10px 12px}.problem-list button.selected{background:#354aa6;border-color:#7285ff}
+    #question-dialog{width:min(520px,calc(100% - 32px));margin:auto;border-color:var(--hs-border);color:var(--hs-ink)}
+    #question-dialog::backdrop{background:#10131a90}
+    #question-body{min-height:130px;font-family:inherit}
     @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:20px 12px}}
   </style>
   <link rel="stylesheet" href="/styles.css">
@@ -39,7 +42,22 @@
     </aside>
     <main>
       <div class="panel student-banner"><div><span class="eyebrow">SIGNED IN</span><h2 id="student-label">학생</h2></div><button id="logout" class="secondary">로그아웃</button></div>
-      <section class="panel problem-statement" aria-labelledby="problem-title"><h2 id="problem-title">문제를 선택하세요.</h2><div id="description"></div></section>
+      <section class="panel problem-statement" aria-labelledby="problem-title">
+        <h2 id="problem-title">문제를 선택하세요.</h2><div id="description"></div>
+        <div class="actions"><button id="question-open" class="secondary" type="button" disabled>질문 요청</button></div>
+        <p id="question-receipt" class="muted" role="status"></p>
+      </section>
+      <dialog id="question-dialog" class="panel" aria-labelledby="question-title">
+        <form id="question-form">
+          <h2 id="question-title">이 문제에 대해 질문하기</h2>
+          <p id="question-problem"></p>
+          <p class="muted">어떤 부분이 어려운지 적어 주세요. 관리자가 질문을 확인한 뒤 직접 안내합니다.</p>
+          <label for="question-body">질문 내용 (최대 2,000자)</label>
+          <textarea id="question-body" required maxlength="2000" autofocus></textarea>
+          <p id="question-error" class="muted" role="alert"></p>
+          <div class="actions"><button id="question-send" class="primary" type="submit">질문 요청하기</button><button id="question-cancel" class="secondary" type="button">닫기</button></div>
+        </form>
+      </dialog>
       <div class="panel"><h2>Python 3 코드</h2><label for="code-file">.py 파일 선택</label><input id="code-file" type="file" accept=".py,text/x-python"><p class="muted">파일을 선택하면 아래 편집기에 코드가 표시됩니다.</p><textarea id="code" spellcheck="false">a, b = map(int, input().split())
 print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 또는 선택한 줄의 주석 전환. 코드는 학생·문제별로 이 브라우저에 자동 저장됩니다.</p><p id="code-save-status" class="muted" role="status"></p><button id="restore-accepted" class="secondary" disabled>정답 코드 복원</button><label for="stdin">실행 입력 (stdin)</label><textarea id="stdin" spellcheck="false">2 3</textarea><div class="actions"><button id="run">실행</button><button id="submit" class="primary">문제 채점 (코드 제출)</button></div></div>
       <p class="muted">문제를 열어 둔 동안의 탭 숨김·창 포커스 이탈 횟수와 시간이 제출 시 관리자에게 전달됩니다.</p><p id="attention-status" class="muted" role="status"></p>
@@ -50,6 +68,39 @@ print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 
 </div>
 <script>
 const $ = id => document.getElementById(id);
+// Keep the native textarea for selection, IME, history and submission.
+const pythonKeywords=new Set('False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case type'.split(' '));
+const pythonBuiltins=new Set('abs all any bool bytes callable chr dict divmod enumerate filter float format frozenset getattr hasattr hash hex input int isinstance issubclass iter len list map max min next object oct open ord pow print range repr reversed round set sorted str sum super tuple type zip __import__'.split(' '));
+function pythonTokens(source){
+  const pattern=/#.*|(?:\b(?:[rRuUbBfF]{1,2}))?(?:"""[\s\S]*?(?:"""|$)|'''[\s\S]*?(?:'''|$)|"(?:\\[^]|[^"\\\n])*(?:"|(?=\n|$))|'(?:\\[^]|[^'\\\n])*(?:'|(?=\n|$)))|\b(?:0[xX][\da-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|\d[\d_]*(?:\.[\d_]*)?(?:[eE][+-]?[\d_]+)?[jJ]?)|[\p{L}_][\p{L}\p{N}_]*|[^]/gu;
+  return [...source.matchAll(pattern)].map(match=>{
+    const text=match[0];
+    const kind=text.startsWith('#')?'comment':/^(?:[rRuUbBfF]{0,2})["']/.test(text)?'string':/^\d/.test(text)?'number':pythonKeywords.has(text)?'keyword':pythonBuiltins.has(text)?'builtin':null;
+    return {text,kind};
+  });
+}
+const codeEditor=$('code'),codeFrame=document.createElement('div'),codeHighlight=document.createElement('pre');
+codeFrame.className='python-editor';codeHighlight.className='python-highlight';codeHighlight.setAttribute('aria-hidden','true');
+codeEditor.before(codeFrame);codeFrame.append(codeHighlight,codeEditor);codeEditor.wrap='off';
+codeEditor.setAttribute('aria-label','Python 코드 편집기');
+let highlightedSource=null;
+function syncCodeScroll(){codeHighlight.scrollTop=codeEditor.scrollTop;codeHighlight.scrollLeft=codeEditor.scrollLeft}
+function refreshCodeHighlight(){
+  if(highlightedSource!==codeEditor.value){
+    const fragment=document.createDocumentFragment();
+    for(const {text,kind} of pythonTokens(codeEditor.value)){
+      if(kind){const span=document.createElement('span');span.className='python-'+kind;span.textContent=text;fragment.append(span)}
+      else fragment.append(document.createTextNode(text));
+    }
+    fragment.append(document.createTextNode('\n'));
+    codeHighlight.replaceChildren(fragment);highlightedSource=codeEditor.value;
+  }
+  syncCodeScroll();
+}
+codeEditor.addEventListener('input',refreshCodeHighlight);
+codeEditor.addEventListener('scroll',syncCodeScroll);
+new ResizeObserver(()=>{codeHighlight.style.width=codeEditor.clientWidth+'px';codeHighlight.style.height=codeEditor.clientHeight+'px';syncCodeScroll()}).observe(codeEditor);
+refreshCodeHighlight();
 let problems = [];
 let weeks = [];
 let progressWeeks = [];
@@ -153,11 +204,13 @@ function persistCode(studentId,problemId,record){
   catch{cacheFailed=true}
 }
 function updateCodeStatus(){
+  refreshCodeHighlight();
   const record=currentStudent&&activeProblem?codeRecord(currentStudent,activeProblem):{};
   $('restore-accepted').disabled=!record.accepted;
   $('code-save-status').textContent=cacheFailed?'브라우저 저장에 실패했습니다. 코드를 파일로 보관하세요.':record.accepted?'자동 저장됨 · 정답 제출 #'+record.accepted.submission_id+($('code').value===record.accepted.code?' 원문 표시 중':' 원문 별도 보관'):'이 브라우저에 자동 저장됨';
 }
 function saveDraft(){
+  refreshCodeHighlight();
   if(!currentStudent||!activeProblem)return;
   captureHistory();
   updateAttention();
@@ -243,7 +296,10 @@ function renderProblem(preferAccepted=false){
   if(changingProblem){
     stopAttention();
     activeProblem=p.id;
+    $('question-receipt').textContent='';
+    $('question-dialog').close();
   }
+  $('question-open').disabled=false;
   if(changingProblem||(preferAccepted&&codeRecord(currentStudent,p.id).accepted)){
     const record=codeRecord(currentStudent,p.id);
     $('code').value=record.accepted?.code??(typeof record.draft==='string'?record.draft:(p.id==='sum-two'?initialCode:''));
@@ -266,7 +322,7 @@ function renderWeek(preferredProblem=$('problem').value){
   if(selected.some(p=>p.id===preferredProblem))$('problem').value=preferredProblem;
   $('problem-list').replaceChildren(...selected.map(p=>{const state=stateById.get(p.id);const button=document.createElement('button');button.dataset.id=p.id;button.textContent=(state?.solved?'✓  ':state?.attempts?'•  ':'')+p.title;if(state?.solved)button.classList.add('solved');button.onclick=()=>{$('problem').value=p.id;renderProblem(true)};return button}));
   $('week-progress').textContent=weekState?(weekState.problems.filter(p=>p.solved).length+' / '+weekState.problems.length+'문제 정답'):'주차를 선택하세요.';
-  if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('problem-title').textContent='등록된 문제 없음';$('description').textContent='이 주차에는 아직 문제가 없습니다.';updateCodeStatus()}
+  if(selected.length)renderProblem();else {stopAttention();activeProblem=null;$('code').value='';$('problem-title').textContent='등록된 문제 없음';$('description').textContent='이 주차에는 아직 문제가 없습니다.';$('question-open').disabled=true;$('question-receipt').textContent='';$('question-dialog').close();updateCodeStatus()}
 }
 async function problemData(path,label){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),5000);
@@ -332,6 +388,41 @@ async function execute(mode){
   finally{for(const id of ['run','submit'])$(id).disabled=false}
 }
 $('run').onclick=()=>execute('run');$('submit').onclick=()=>execute('submit');$('problem').onchange=()=>renderProblem(true);$('week').onchange=()=>renderWeek();
+let questionTarget=null;
+$('question-open').onclick=()=>{
+  if(!currentStudent||!activeProblem||$('question-send').disabled)return;
+  const problem=problems.find(item=>item.id===activeProblem);
+  if(!problem)return;
+  if(questionTarget?.student!==currentStudent||questionTarget?.problem!==activeProblem)$('question-body').value='';
+  questionTarget={student:currentStudent,problem:activeProblem};
+  $('question-problem').textContent=problem.title;
+  $('question-error').textContent='';
+  $('question-dialog').showModal();
+};
+$('question-cancel').onclick=()=>$('question-dialog').close();
+$('question-form').onsubmit=async event=>{
+  event.preventDefault();
+  const target=questionTarget,question=$('question-body').value.trim();
+  if(!target||target.student!==currentStudent||target.problem!==activeProblem||$('question-send').disabled)return;
+  if(!question){$('question-error').textContent='질문 내용을 입력하세요.';return}
+  $('question-send').disabled=true;
+  $('question-error').textContent='';
+  try{
+    const response=await fetch('/api/student/questions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({problem_id:target.problem,question})});
+    const result=await response.json();
+    if(questionTarget!==target||currentStudent!==target.student||activeProblem!==target.problem)return;
+    if(response.status===401){showLogin();$('login-error').textContent=result.error;return}
+    if(!response.ok)throw Error(result.error||'질문을 보내지 못했습니다.');
+    $('question-dialog').close();
+    $('question-body').value='';
+    $('question-receipt').textContent='질문을 보냈습니다. 관리자가 확인한 뒤 직접 안내합니다.';
+  }catch(error){
+    if(questionTarget===target&&currentStudent===target.student&&activeProblem===target.problem){
+      const status=$('question-dialog').open?'question-error':'question-receipt';
+      $(status).textContent=error.message;
+    }
+  }finally{$('question-send').disabled=false}
+};
 $('code').addEventListener('input',saveDraft);
 document.addEventListener('visibilitychange',persistAttention);
 window.addEventListener('blur',persistAttention);
@@ -422,7 +513,7 @@ $('code-file').onchange=async()=>{
 };
 $('refresh-problems').onclick=()=>loadProblems().catch(e=>{$('stderr').textContent=e.message});
 window.addEventListener('focus',()=>{if(!$('app-shell').hidden)loadProblems().catch(()=>{})});
-function showLogin(){saveDraft();stopAttention();currentStudent=null;activeProblem=null;loadVersion++;$('code').value='';$('login-view').hidden=false;$('app-shell').hidden=true}
+function showLogin(){saveDraft();stopAttention();currentStudent=null;activeProblem=null;loadVersion++;$('code').value='';questionTarget=null;$('question-dialog').close();$('question-open').disabled=true;$('question-body').value='';$('question-receipt').textContent='';$('login-view').hidden=false;$('app-shell').hidden=true}
 async function showApp(student){saveDraft();stopAttention();currentStudent=student.student_id;activeProblem=null;progressWeeks=[];$('code').value='';$('student-label').textContent=student.student_id+' · '+student.name;$('login-view').hidden=true;$('app-shell').hidden=false;await loadProblems()}
 async function login(){
   $('login').disabled=true;$('login-error').textContent='';

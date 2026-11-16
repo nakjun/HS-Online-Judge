@@ -17,12 +17,23 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 .admin-sidebar button.active{box-shadow:inset 3px 0 0 var(--hs-violet)}
 .admin-sidebar #admin-logout{margin-top:20px;color:var(--hs-error)}
 .admin-pages{min-width:0}.admin-pages>.panel{margin-top:0}.admin-pages>.panel[hidden]{display:none!important}
+.question-card{padding:16px 0;border-bottom:1px solid var(--hs-border)}
+.question-card h3,.question-card p{margin:0 0 8px}
+.question-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.question-count{display:inline-block;margin-left:6px;padding:2px 7px;border-radius:999px;background:var(--hs-violet);color:white;font-size:12px}
+.question-alert{position:fixed;z-index:10;top:16px;right:16px;width:min(360px,calc(100% - 32px));padding:16px;border:1px solid var(--hs-border);border-radius:12px;background:var(--hs-surface);box-shadow:0 6px 24px #30234030}
+.question-alert p{margin:0;font-weight:700}
+.question-alert button+button{margin-left:8px}
 @media(max-width:760px){.admin-layout{grid-template-columns:1fr}.admin-sidebar{position:static;display:flex;flex-wrap:wrap;gap:4px}.admin-sidebar h2{width:100%}.admin-sidebar button{width:auto;margin:0}.admin-sidebar #admin-logout{margin:0 0 0 auto}}
 @media(max-width:640px){.row{grid-template-columns:1fr}}
 </style><link rel="stylesheet" href="/styles.css"></head><body><div class="brand-strip"><div class="brand-strip-inner"><span>HANSHIN UNIVERSITY</span><span>CLASSROOM CODE JUDGE</span></div></div><div class="wrap">
 <header><div><span class="eyebrow">HANSHIN UNIVERSITY · CLASSROOM</span><h1>관리자</h1></div><a href="/">문제 풀이로 돌아가기</a></header>
+<aside id="question-alert" class="question-alert" aria-label="학생 질문 알림" hidden>
+  <p id="question-alert-message" role="status"></p>
+  <button id="question-alert-open" type="button">질문 확인</button><button id="question-alert-close" type="button" class="secondary">닫기</button>
+</aside>
 <div class="admin-layout"><aside id="admin-sidebar" class="admin-sidebar" aria-label="관리자 메뉴" hidden><h2>관리자 메뉴</h2>
-<button type="button" data-tab="class-code">수업 코드 관리</button><button type="button" data-tab="students">학생 명단</button><button type="button" data-tab="progress">주차별 제출 현황</button><button type="button" data-tab="submissions">최근 제출</button><button type="button" data-tab="weeks">주차 추가</button><button type="button" data-tab="problems">문제 추가</button><button type="button" id="admin-logout">관리자 로그아웃</button></aside><main id="admin-pages" class="admin-pages">
+<button type="button" data-tab="class-code">수업 코드 관리</button><button type="button" data-tab="students">학생 명단</button><button type="button" data-tab="progress">주차별 제출 현황</button><button type="button" data-tab="solve-statistics">풀이 통계</button><button type="button" data-tab="submissions">최근 제출</button><button type="button" data-tab="questions">학생 질문<span id="question-count" class="question-count" hidden></span></button><button type="button" data-tab="weeks">주차 추가</button><button type="button" data-tab="problems">문제 추가</button><button type="button" id="admin-logout">관리자 로그아웃</button></aside><main id="admin-pages" class="admin-pages">
 <div class="panel" id="admin-auth"><h2>관리자 로그인</h2><p class="note">관리자 토큰을 입력하세요. 로그인 정보는 브라우저 저장소에 저장하지 않습니다.</p><input id="token" type="password" autocomplete="off" placeholder="관리자 토큰"><button id="check" class="secondary">로그인</button></div>
 <div class="panel"><h2>수업 코드 관리</h2><p id="class-code-status" class="note">관리자 인증 후 현재 상태를 확인할 수 있습니다.</p><div class="row"><div><label for="new-class-code">새 수업 코드</label><input id="new-class-code" type="password" autocomplete="new-password" placeholder="영문·숫자 4~32자"></div><div><label for="confirm-class-code">새 수업 코드 확인</label><input id="confirm-class-code" type="password" autocomplete="new-password" placeholder="같은 코드를 다시 입력"></div></div><button id="save-class-code">수업 코드 저장</button><p class="note">코드를 바꾸면 기존 학생은 로그아웃되며 새 코드로 다시 로그인해야 합니다.</p></div>
 <div class="panel"><h2>학생 명단 가져오기</h2><p class="note">.xlsx 첫 행에 <strong>학번</strong>과 <strong>이름</strong> 열이 필요합니다. 기존 학번은 이름을 갱신하며, 파일에 없는 학생은 유지됩니다. 앞자리 0이 있는 학번은 엑셀에서 텍스트로 저장하세요.</p><input id="roster-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"><button id="import-roster">엑셀 가져오기</button><button id="refresh-data" class="secondary">목록 새로고침</button><h3>등록된 학생</h3><div class="scroll"><table><thead><tr><th>학번</th><th>이름</th></tr></thead><tbody id="student-rows"></tbody></table></div></div>
@@ -34,26 +45,58 @@ table{width:100%;border-collapse:collapse;margin-top:12px}th,td{text-align:left;
 <div class="row"><div><label for="input-desc">입력 설명</label><textarea id="input-desc"></textarea></div><div><label for="output-desc">출력 설명</label><textarea id="output-desc"></textarea></div></div>
 <h2>공개 예제</h2><p class="note">풀이 화면에서 예제 입력과 정답을 볼 수 있습니다.</p><div id="samples"></div><button id="add-sample" class="secondary">예제 추가</button>
 <h2 style="margin-top:30px">채점 테스트 케이스</h2><p class="note">제출 코드를 각 입력으로 실행한 뒤 예상 출력과 비교합니다. 풀이 화면에는 노출되지 않습니다.</p><div id="tests"></div><button id="add-test" class="secondary">테스트 추가</button><br><button id="add-problem">문제 저장</button></div>
+<section class="panel" aria-labelledby="questions-title" hidden>
+  <h2 id="questions-title">학생 질문</h2>
+  <p class="note">학생과 문제를 확인하고 직접 안내한 뒤 처리 완료를 누르세요.</p>
+  <label for="question-filter">질문 상태</label>
+  <select id="question-filter"><option value="pending">대기 중</option><option value="resolved">처리 완료</option></select>
+  <button id="refresh-questions" class="secondary" type="button">목록 새로고침</button>
+  <p id="questions-status" class="note" role="status"></p>
+  <div id="question-list"></div>
+  <button id="questions-prev" class="secondary" type="button" disabled>이전</button>
+  <button id="questions-next" class="secondary" type="button" disabled>다음</button>
+</section>
+<section class="panel" aria-labelledby="statistics-title" hidden>
+  <h2 id="statistics-title">풀이 통계</h2>
+  <p class="note">학생 한 명이 같은 문제를 여러 번 맞혀도 한 명으로 집계합니다. 정답 비율은 등록 학생 전체를 기준으로 계산합니다.</p>
+  <button id="refresh-statistics" class="secondary" type="button">통계 새로고침</button>
+  <p id="statistics-status" class="note" role="status"></p>
+  <h3>주차별 요약</h3>
+  <div class="scroll"><table><thead><tr><th scope="col">주차</th><th scope="col">문제 수</th><th scope="col">제출한 학생</th><th scope="col">1문제 이상 정답</th><th scope="col">전부 정답</th></tr></thead><tbody id="statistics-weeks"></tbody></table></div>
+  <label for="statistics-week">상세 주차</label>
+  <select id="statistics-week" disabled></select>
+  <h3>문제별 정답 인원</h3>
+  <p id="statistics-empty" class="note" hidden>이 주차에 등록된 문제가 없습니다.</p>
+  <div class="scroll"><table><thead><tr><th scope="col">문제</th><th scope="col">제출한 학생</th><th scope="col">맞힌 학생</th><th scope="col">정답 비율</th></tr></thead><tbody id="statistics-problems"></tbody></table></div>
+  <h3>맞힌 문제 수 분포</h3>
+  <div class="scroll"><table><thead><tr><th scope="col">맞힌 문제 수</th><th scope="col">학생 수</th></tr></thead><tbody id="statistics-distribution"></tbody></table></div>
+</section>
 <div id="message" role="status">관리자 토큰을 입력하세요.</div>
 </main></div></div><script>
 const $=id=>document.getElementById(id);
-const tabs=['class-code','students','progress','submissions','weeks','problems'];
+const tabs=['class-code','students','progress','submissions','weeks','problems','questions','solve-statistics'];
 const pages=[...document.querySelectorAll('#admin-pages > .panel')];
 let adminToken='';
+let questionOffset=0,questionLoad=0,questionBusy=false,questionsLoading=false;
+let questionAlertSession=0,questionAlertLoading=false,lastNotifiedQuestion=0;
+let solveStats=null,statisticsLoad=0;
 for(const key of ['judge.adminToken','judge.studentId','judge.studentName']){try{localStorage.removeItem(key)}catch{}}
 function message(value){$('message').textContent=value}
-function showAuth(){adminToken='';localStorage.removeItem('judge.adminToken');$('admin-sidebar').hidden=true;pages.forEach((page,index)=>page.hidden=index!==0);$('token').value='';message('관리자 토큰을 입력하세요.')}
+function showAuth(){adminToken='';questionLoad++;questionOffset=0;$('question-list').replaceChildren();$('questions-status').textContent='';clearQuestionAlerts();clearStatistics();localStorage.removeItem('judge.adminToken');$('admin-sidebar').hidden=true;pages.forEach((page,index)=>page.hidden=index!==0);$('token').value='';message('관리자 토큰을 입력하세요.')}
 function activateTab(tab){
   if(!tabs.includes(tab))tab='students';
   pages.forEach((page,index)=>page.hidden=index!==tabs.indexOf(tab)+1);
   for(const button of document.querySelectorAll('[data-tab]')){const active=button.dataset.tab===tab;button.classList.toggle('active',active);button.setAttribute('aria-current',active?'page':'false')}
   history.replaceState(null,'','#'+tab);
   if(tab==='submissions'&&adminToken)refreshSubmissions().catch(e=>message(e.message));
+  if(tab==='questions'&&adminToken)refreshQuestions();
+  if(tab==='solve-statistics'&&adminToken)refreshStatistics();
 }
 async function showAdmin(){
   await Promise.all([refreshWeeks(),refreshClassCode()]);
   const count=await refreshData();
   $('admin-sidebar').hidden=false;activateTab(location.hash.slice(1));
+  refreshQuestionAlerts();
   message('인증 성공 · 등록된 학생 '+count+'명');
 }
 function addCase(target,input='',output=''){
@@ -72,6 +115,104 @@ async function request(path,body){
   const response=await fetch(path,{method:body?'POST':'GET',headers:{'Authorization':'Bearer '+(adminToken||$('token').value),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
   const result=await response.json();if(!response.ok){if(response.status===401&&adminToken)showAuth();throw Error(result.error||'요청 실패')}return result;
 }
+function clearQuestionAlerts(){
+  questionAlertSession++;
+  questionAlertLoading=false;
+  lastNotifiedQuestion=0;
+  $('question-count').hidden=true;
+  $('question-count').textContent='';
+  $('question-alert').hidden=true;
+}
+async function refreshQuestionAlerts(){
+  if(!adminToken||questionAlertLoading)return;
+  const session=questionAlertSession;
+  questionAlertLoading=true;
+  try{
+    const summary=await request('/api/admin/questions/summary');
+    if(session!==questionAlertSession)return;
+    const {pending_count:count,latest_pending_id:latest}=summary;
+    $('question-count').textContent=count+'건';
+    $('question-count').hidden=count===0;
+    if(!count)$('question-alert').hidden=true;
+    if(latest>lastNotifiedQuestion){
+      lastNotifiedQuestion=latest;
+      $('question-alert').hidden=false;
+    }
+    if(!$('question-alert').hidden){
+      $('question-alert-message').textContent='학생 질문 요청 '+count+'건이 대기 중입니다.';
+    }
+  }catch(error){
+    if(session===questionAlertSession&&adminToken)message('질문 알림 확인 실패 · '+error.message);
+  }finally{
+    if(session===questionAlertSession)questionAlertLoading=false;
+  }
+}
+$('question-alert-close').onclick=()=>$('question-alert').hidden=true;
+$('question-alert-open').onclick=()=>{
+  $('question-alert').hidden=true;
+  $('question-filter').value='pending';
+  questionOffset=0;
+  activateTab('questions');
+  $('question-filter').focus();
+};
+window.addEventListener('focus',refreshQuestionAlerts);
+setInterval(refreshQuestionAlerts,5000);
+function questionDate(value){
+  return new Date(value.replace(' ','T')+'Z').toLocaleString('ko-KR');
+}
+async function refreshQuestions(offset=questionOffset){
+  const load=++questionLoad;
+  const status=$('question-filter').value;
+  questionsLoading=true;
+  try{
+    const data=await request('/api/admin/questions?status='+status+'&offset='+offset);
+    if(!adminToken||load!==questionLoad)return;
+    if(!data.items.length&&offset>0){await refreshQuestions(Math.max(0,offset-50));return}
+    questionOffset=offset;
+    const fragment=document.createDocumentFragment();
+    for(const item of data.items){
+      const card=document.createElement('article'),heading=document.createElement('h3');
+      const meta=document.createElement('p'),body=document.createElement('p');
+      card.className='question-card';
+      heading.textContent=item.student_id+' · '+item.name;
+      meta.className='note';
+      meta.textContent=[item.week_title,item.problem_title,'접수 '+questionDate(item.created_at),
+        item.resolved_at?'완료 '+questionDate(item.resolved_at):''].filter(Boolean).join(' · ');
+      body.className='question-text';
+      body.textContent=item.body;
+      card.append(heading,meta,body);
+      if(!item.resolved_at){
+        const resolve=document.createElement('button');
+        resolve.type='button';
+        resolve.textContent='처리 완료';
+        resolve.onclick=async()=>{
+          if(questionBusy)return;
+          questionBusy=true;
+          resolve.disabled=true;
+          try{
+            await request('/api/admin/questions/resolve',{id:item.id});
+            refreshQuestionAlerts();
+            await refreshQuestions();
+            if(adminToken)message('질문을 처리 완료로 표시했습니다.');
+          }catch(error){
+            message(error.message);
+            resolve.disabled=false;
+          }finally{questionBusy=false}
+        };
+        card.append(resolve);
+      }
+      fragment.append(card);
+    }
+    $('question-list').replaceChildren(fragment);
+    $('questions-status').textContent=data.items.length
+      ? (offset+1)+'–'+(offset+data.items.length)+'번째 질문'
+      : (status==='pending'?'대기 중인 질문이 없습니다.':'처리 완료된 질문이 없습니다.');
+    $('questions-prev').disabled=offset===0;
+    $('questions-next').disabled=!data.has_more;
+  }catch(error){
+    if(adminToken&&load===questionLoad)$('questions-status').textContent=error.message;
+  }finally{if(load===questionLoad)questionsLoading=false}
+}
 async function refreshWeeks(){
   const weeks=await request('/api/weeks');
   for(const id of ['week','progress-week']){
@@ -83,6 +224,47 @@ async function refreshWeeks(){
 }
 async function refreshClassCode(){const status=await request('/api/admin/class-code');$('class-code-status').textContent=status.is_default?'현재 기본 수업 코드: AS006':'사용자 지정 수업 코드가 설정되어 있습니다.'}
 function fillRows(target,items,fields){$(target).replaceChildren(...items.map(item=>{const tr=document.createElement('tr');for(const field of fields){const td=document.createElement('td');td.textContent=String(item[field]??'');tr.append(td)}return tr}))}
+function clearStatistics(){
+  statisticsLoad++;
+  solveStats=null;
+  $('statistics-week').disabled=true;
+  for(const id of ['statistics-week','statistics-weeks','statistics-problems','statistics-distribution','statistics-status']){
+    $(id).replaceChildren();
+  }
+  $('statistics-empty').hidden=true;
+}
+function renderWeekStatistics(){
+  const week=solveStats?.weeks.find(item=>item.id===$('statistics-week').value);
+  const total=solveStats?.total_students||0;
+  const problems=(week?.problems||[]).map(item=>({
+    ...item, rate:total?(100*item.solved/total).toLocaleString('ko-KR',{maximumFractionDigits:1})+'%':'—'
+  }));
+  fillRows('statistics-problems',problems,['title','attempted','solved','rate']);
+  fillRows('statistics-distribution',(week?.distribution||[]).map((students,solved)=>({solved,students})),['solved','students']);
+  $('statistics-empty').hidden=!week||problems.length>0;
+}
+async function refreshStatistics(){
+  const load=++statisticsLoad;
+  $('statistics-status').textContent='통계를 불러오는 중입니다.';
+  try{
+    const data=await request('/api/admin/solve-statistics');
+    if(!adminToken||load!==statisticsLoad)return;
+    solveStats=data;
+    const select=$('statistics-week'),previous=select.value;
+    select.replaceChildren(...data.weeks.map(week=>new Option(week.title,week.id)));
+    select.disabled=!data.weeks.length;
+    const defaultWeek=[...data.weeks].reverse().find(week=>week.problems.length)||data.weeks.at(-1);
+    select.value=data.weeks.some(week=>week.id===previous)?previous:defaultWeek?.id||'';
+    fillRows('statistics-weeks',data.weeks.map(week=>({...week,total:week.problems.length})),
+      ['title','total','attempted','solved','completed']);
+    $('statistics-status').textContent='등록 학생 '+data.total_students+'명'+(data.weeks.length?'':' · 등록된 주차가 없습니다.');
+    renderWeekStatistics();
+  }catch(error){
+    if(adminToken&&load===statisticsLoad)$('statistics-status').textContent=error.message;
+  }
+}
+$('refresh-statistics').onclick=refreshStatistics;
+$('statistics-week').onchange=renderWeekStatistics;
 let progressOffset=0,progressTotal=0;
 let progressSort='student_id',progressDirection='asc',progressVersion=0;
 function showProgressDetail(student,cell,week){
@@ -175,6 +357,20 @@ function refreshVisibleSubmissions(){if(adminToken&&location.hash==='#submission
 window.addEventListener('focus',refreshVisibleSubmissions);
 document.addEventListener('visibilitychange',refreshVisibleSubmissions);
 setInterval(refreshVisibleSubmissions,10000);
+$('refresh-questions').onclick=()=>refreshQuestions();
+$('question-filter').onchange=()=>{
+  questionOffset=0;
+  $('question-list').replaceChildren();
+  $('questions-prev').disabled=$('questions-next').disabled=true;
+  refreshQuestions();
+};
+$('questions-prev').onclick=()=>refreshQuestions(Math.max(0,questionOffset-50));
+$('questions-next').onclick=()=>refreshQuestions(questionOffset+50);
+setInterval(()=>{
+  if(adminToken&&location.hash==='#questions'&&!document.hidden&&!questionBusy&&!questionsLoading
+     &&questionOffset===0&&$('question-filter').value==='pending'
+     &&!$('question-list').contains(document.activeElement))refreshQuestions();
+},10000);
 $('progress-search').onclick=async()=>{try{progressOffset=0;await refreshProgress()}catch(e){message(e.message)}};
 $('progress-query').onkeydown=event=>{if(event.key==='Enter')$('progress-search').click()};
 $('progress-week').onchange=async()=>{progressOffset=0;try{await refreshProgress()}catch(e){message(e.message)}};

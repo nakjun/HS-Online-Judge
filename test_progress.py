@@ -70,6 +70,24 @@ class ProgressTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 storage.progress_page(self.weeks, self.problems, **options)
 
+    def test_solve_statistics_counts_students_and_keeps_prior_acceptance(self):
+        self.submit('104', 'a')
+        self.submit('104', 'a')
+        self.submit('104', 'a', 'WRONG_ANSWER')
+        self.submit('104', 'b')
+        self.submit('103', 'b')
+        self.submit('102', 'a', 'WRONG_ANSWER')
+        self.submit('001', 'old')
+        self.submit('002', 'deleted-problem')
+        result = storage.solve_statistics(self.weeks, self.problems)
+        old, current, empty = result['weeks']
+        self.assertEqual(result['total_students'], 105)
+        self.assertEqual((current['attempted'], current['solved'], current['completed']), (3, 2, 1))
+        self.assertEqual(current['distribution'], [103, 1, 1])
+        self.assertEqual([(p['attempted'], p['solved']) for p in current['problems']], [(2, 1), (2, 2)])
+        self.assertEqual(old['distribution'], [104, 1])
+        self.assertEqual((empty['completed'], empty['distribution']), (0, [105]))
+
     def test_accepted_source_preserved_and_scoped_to_student(self):
         source = '  # 공백과 줄바꿈\nprint("원문")\n\n'
         self.submit('000', 'a', code='old')

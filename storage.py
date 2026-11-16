@@ -55,6 +55,15 @@ def init_db():
             student_id TEXT NOT NULL REFERENCES students(student_id),
             expires_at INTEGER NOT NULL
         )""")
+        db.execute("""CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY,
+            student_id TEXT NOT NULL REFERENCES students(student_id),
+            problem_id TEXT NOT NULL,
+            body TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            resolved_at TEXT
+        )""")
+        db.execute("CREATE INDEX IF NOT EXISTS questions_queue ON questions (resolved_at, id)")
         db.execute("""CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -312,6 +321,42 @@ def save_submission(student_id, problem_id, code, verdict, passed, total, entry=
         return cursor.lastrowid
 
 
+def save_question(student_id, problem_id, body):
+    with connect() as db:
+        return db.execute(
+            "INSERT INTO questions(student_id, problem_id, body) VALUES (?, ?, ?)",
+            (student_id, problem_id, body),
+        ).lastrowid
+
+
+def pending_question_summary():
+    with connect() as db:
+        return dict(db.execute(
+            "SELECT COUNT(*) AS pending_count, COALESCE(MAX(id), 0) AS latest_pending_id "
+            "FROM questions WHERE resolved_at IS NULL"
+        ).fetchone())
+
+
+def list_questions(resolved, offset, limit=50):
+    condition = "q.resolved_at IS NOT NULL" if resolved else "q.resolved_at IS NULL"
+    order = "q.resolved_at DESC, q.id DESC" if resolved else "q.id"
+    with connect() as db:
+        rows = db.execute(f"""SELECT q.*, s.name FROM questions q
+            JOIN students s ON q.student_id = s.student_id
+            WHERE {condition} ORDER BY {order} LIMIT ? OFFSET ?""",
+            (limit + 1, offset),
+        ).fetchall()
+    return {"items": [dict(row) for row in rows[:limit]], "has_more": len(rows) > limit}
+
+
+def resolve_question(question_id):
+    with connect() as db:
+        return db.execute(
+            "UPDATE questions SET resolved_at = COALESCE(resolved_at, CURRENT_TIMESTAMP) WHERE id = ?",
+            (question_id,),
+        ).rowcount == 1
+
+
 def list_students():
     with connect() as db:
         return [dict(row) for row in db.execute("SELECT student_id, name FROM students ORDER BY student_id")]
@@ -330,6 +375,50 @@ def get_submission(submission_id):
         row = db.execute("""SELECT s.*, st.name FROM submissions s
             JOIN students st ON st.student_id=s.student_id WHERE s.id=?""", (submission_id,)).fetchone()
         return submission_record(row) if row else None
+
+
+def solve_statistics(weeks, problems):
+    """Count each student once per problem, using all recorded submissions."""
+    summaries = {week["id"]: {**week, "problems": []} for week in weeks}
+    by_problem = {}
+    attempted_by_week = {week_id: set() for week_id in summaries}
+    solved_by_week = {week_id: {} for week_id in summaries}
+    for problem in problems:
+        week_id = problem.get("week_id") or "week-1"
+        if week_id not in summaries:
+            continue
+        detail = {"id": problem["id"], "title": problem["title"], "attempted": 0, "solved": 0}
+        summaries[week_id]["problems"].append(detail)
+        by_problem[problem["id"]] = (week_id, detail)
+
+    with connect() as db:
+        db.execute("BEGIN")
+        total_students = db.execute("SELECT COUNT(*) FROM students").fetchone()[0]
+        for row in db.execute("""SELECT s.problem_id, s.student_id,
+                MAX(CASE WHEN s.verdict = 'ACCEPTED' THEN 1 ELSE 0 END) AS solved
+                FROM submissions s JOIN students st ON st.student_id = s.student_id
+                GROUP BY s.problem_id, s.student_id"""):
+            if row["problem_id"] not in by_problem:
+                continue
+            week_id, detail = by_problem[row["problem_id"]]
+            student_id = row["student_id"]
+            detail["attempted"] += 1
+            attempted_by_week[week_id].add(student_id)
+            if row["solved"]:
+                detail["solved"] += 1
+                counts = solved_by_week[week_id]
+                counts[student_id] = counts.get(student_id, 0) + 1
+
+    for week_id, summary in summaries.items():
+        counts = solved_by_week[week_id]
+        problem_count = len(summary["problems"])
+        distribution = [total_students - len(counts)] + [0] * problem_count
+        for solved_count in counts.values():
+            distribution[solved_count] += 1
+        summary.update(attempted=len(attempted_by_week[week_id]), solved=len(counts),
+                       completed=distribution[-1] if problem_count else 0,
+                       distribution=distribution)
+    return {"total_students": total_students, "weeks": list(summaries.values())}
 
 
 def progress_page(weeks, problems, query="", offset=0, limit=100,

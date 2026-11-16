@@ -14,6 +14,8 @@ from urllib.parse import parse_qs, urlparse
 from runner import run_code
 from storage import class_code_status, create_student_session, delete_student_session, get_submission, import_students, init_db, list_students, list_submissions, progress_page, save_submission, session_student, set_class_code, student_exists, student_progress, verify_class_code
 from storage import accepted_codes
+from storage import list_questions, pending_question_summary, resolve_question, save_question
+from storage import solve_statistics
 
 ROOT = Path(__file__).parent
 PROBLEMS_FILE = ROOT / "problems.json"
@@ -151,10 +153,36 @@ class Handler(BaseHTTPRequestHandler):
             if not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
             return self.reply(200, class_code_status())
+        if path in ("/api/admin/questions", "/api/admin/questions/summary"):
+            if not self.authorized(ADMIN_TOKEN):
+                return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
+            if path.endswith("/summary"):
+                return self.reply(200, pending_question_summary())
+            params = parse_qs(parsed_url.query)
+            status = params.get("status", ["pending"])[0]
+            try:
+                offset = int(params.get("offset", ["0"])[0])
+                if status not in ("pending", "resolved") or not 0 <= offset < 2**63:
+                    raise ValueError
+            except ValueError:
+                return self.reply(400, {"error": "질문 상태 또는 조회 위치가 올바르지 않습니다."})
+            data = list_questions(status == "resolved", offset)
+            weeks, problems = read_data()
+            week_titles = {week["id"]: week["title"] for week in weeks}
+            problem_data = {problem["id"]: problem for problem in problems}
+            for question in data["items"]:
+                problem = problem_data.get(question["problem_id"], {})
+                question["problem_title"] = problem.get("title", question["problem_id"])
+                question["week_title"] = week_titles.get(problem.get("week_id", "week-1"), "")
+            return self.reply(200, data)
         if path in ("/api/admin/students", "/api/admin/submissions"):
             if not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
             return self.reply(200, list_students() if path.endswith("/students") else list_submissions())
+        if path == "/api/admin/solve-statistics":
+            if not self.authorized(ADMIN_TOKEN):
+                return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
+            return self.reply(200, solve_statistics(*read_data()))
         if path == "/api/admin/progress":
             if not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
@@ -188,13 +216,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self.allowed_client():
             return self.reply(403, {"error": "허용된 내부망에서만 접속할 수 있습니다."})
         path = urlparse(self.path).path
-        if path not in ("/api/run", "/api/submit", "/api/student/login", "/api/student/logout", "/api/admin/weeks", "/api/admin/problems", "/api/admin/class-code", "/api/admin/students/import"):
+        if path not in ("/api/run", "/api/submit", "/api/student/login", "/api/student/logout", "/api/admin/weeks", "/api/admin/problems", "/api/admin/class-code", "/api/admin/students/import", "/api/student/questions", "/api/admin/questions/resolve"):
             return self.reply(404, {"error": "찾을 수 없습니다."})
         student = None
         if path.startswith("/api/admin/"):
             if not self.authorized(ADMIN_TOKEN):
                 return self.reply(401, {"error": "관리자 토큰이 올바르지 않습니다."})
-        elif path in ("/api/run", "/api/submit"):
+        elif path in ("/api/run", "/api/submit", "/api/student/questions"):
             student = self.current_student()
             if not student:
                 return self.reply(401, {"error": "학생 로그인이 필요합니다."})
@@ -220,6 +248,20 @@ class Handler(BaseHTTPRequestHandler):
                                   {"Set-Cookie": f"judge_session={session}; HttpOnly; SameSite=Lax; Path=/"})
             if path == "/api/admin/class-code":
                 return self.reply(200, set_class_code(body.get("code")))
+            if path == "/api/student/questions":
+                problem_id = short_text(body.get("problem_id"), "문제 번호", 120)
+                question = short_text(body.get("question"), "질문", 2000)
+                if not any(problem["id"] == problem_id for problem in read_data()[1]):
+                    return self.reply(404, {"error": "문제를 찾을 수 없습니다."})
+                question_id = save_question(student["student_id"], problem_id, question)
+                return self.reply(201, {"id": question_id})
+            if path == "/api/admin/questions/resolve":
+                question_id = body.get("id")
+                if type(question_id) is not int or not 0 < question_id < 2**63:
+                    raise ValueError("질문 번호가 올바르지 않습니다.")
+                if not resolve_question(question_id):
+                    return self.reply(404, {"error": "질문을 찾을 수 없습니다."})
+                return self.reply(200, {"ok": True})
             if path == "/api/admin/students/import":
                 filename = body.get("filename", "")
                 encoded = body.get("data", "")

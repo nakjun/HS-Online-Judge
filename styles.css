@@ -54,6 +54,17 @@ button.secondary:hover { background: #dfd3ef; }
 .student-banner { display: flex; align-items: center; justify-content: space-between; gap: 15px; }
 .student-banner h2 { margin: 0; }
 #code { background: #20202a; color: #f5f0ff; border-color: #514663; }
+.python-editor { position: relative; background: #20202a; border: 1px solid #514663; border-radius: 9px; overflow: hidden; }
+.python-editor:focus-within { outline: 2px solid #b9a2d8; outline-offset: 1px; }
+.python-editor #code, .python-editor .python-highlight { margin: 0; padding: 12px; border: 0; border-radius: 0; font: 14px/1.6 Consolas, "Courier New", monospace; letter-spacing: normal; tab-size: 4; white-space: pre; word-break: normal; overflow-wrap: normal; text-align: left; }
+.python-editor #code { display: block; position: relative; width: 100%; min-height: 350px; background: transparent; color: transparent; -webkit-text-fill-color: transparent; caret-color: #f5f0ff; resize: vertical; outline: none; }
+.python-editor #code::selection { background: #77609a80; }
+.python-editor .python-highlight { position: absolute; top: 0; left: 0; width: 100%; height: 100%; min-height: 0; background: transparent; color: #f5f0ff; overflow: hidden; pointer-events: none; }
+.python-keyword { color: #c9a6ff; }
+.python-builtin { color: #86d9ff; }
+.python-string { color: #e8c68a; }
+.python-comment { color: #90b987; }
+.python-number { color: #efacbf; }
 pre { background: #f2eff6; color: var(--hs-ink); }
 #stdout, #stderr, #submission-code { background: #f2eff6; color: var(--hs-ink); }
 .badge { background: var(--hs-violet-soft); color: var(--hs-violet-dark); }

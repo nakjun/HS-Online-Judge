@@ -35,14 +35,15 @@ class StudentFlowTest(unittest.TestCase):
                 threading.Thread(target=httpd.serve_forever, daemon=True).start()
                 session_cookie = ""
 
-                def request(path, body, admin=False):
+                def request(path, body=None, admin=False):
                     connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
                     headers = {"Content-Type": "application/json"}
                     if admin:
                         headers["Authorization"] = "Bearer " + server.ADMIN_TOKEN
                     elif session_cookie:
                         headers["Cookie"] = session_cookie
-                    connection.request("POST", path, json.dumps(body, ensure_ascii=False).encode("utf-8"), headers)
+                    connection.request("GET" if body is None else "POST", path,
+                                       None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8"), headers)
                     response = connection.getresponse()
                     result = response.status, json.loads(response.read())
                     connection.close()
@@ -57,6 +58,8 @@ class StudentFlowTest(unittest.TestCase):
                         "attention": observation(),
                         "entry": {"largest_paste_chars": 42, "pasted_chars": 42, "typed_chars": 0, "file_upload": False}}
                 self.assertEqual(request("/api/submit", body)[0], 401)
+                question = {"problem_id": "sum-two", "question": "입력은 어떻게 받나요?\n예제를 봤습니다.", "student_id": "someone-else"}
+                self.assertEqual(request("/api/student/questions", question)[0], 401)
                 self.assertEqual(request("/api/student/login", {"student_id": "00123", "student_name": "다른이름", "class_code": "AS006"})[0], 401)
                 self.assertEqual(request("/api/student/login", {"student_id": "00123", "student_name": "김학생", "class_code": "wrong"})[0], 401)
                 connection = http.client.HTTPConnection("127.0.0.1", httpd.server_port)
@@ -68,9 +71,42 @@ class StudentFlowTest(unittest.TestCase):
                 self.assertEqual(response.status, 200)
                 response.read()
                 connection.close()
+                self.assertEqual(request("/api/admin/questions")[0], 401)
+                summary_url = "/api/admin/questions/summary"
+                self.assertEqual(request(summary_url)[0], 401)
+                self.assertEqual(request(summary_url, admin=True),
+                                 (200, {"pending_count": 0, "latest_pending_id": 0}))
+                self.assertEqual(request("/api/student/questions", {**question, "question": "   "})[0], 400)
+                self.assertEqual(request("/api/student/questions", {**question, "problem_id": "missing"})[0], 404)
+                status, created = request("/api/student/questions", question)
+                self.assertEqual(status, 201)
+                self.assertEqual(request(summary_url, admin=True),
+                                 (200, {"pending_count": 1, "latest_pending_id": created["id"]}))
+                status, queue = request("/api/admin/questions", admin=True)
+                self.assertEqual(status, 200)
+                item, = queue["items"]
+                self.assertEqual((item["id"], item["student_id"], item["name"], item["body"]),
+                                 (created["id"], "00123", "김학생", question["question"]))
+                self.assertEqual(item["week_title"], "1주차")
+                self.assertTrue(item["problem_title"])
+                self.assertIsNone(item["resolved_at"])
+                self.assertEqual(request("/api/admin/questions/resolve", created)[0], 401)
+                self.assertEqual(request("/api/admin/questions/resolve", created, True)[0], 200)
+                self.assertEqual(request(summary_url, admin=True),
+                                 (200, {"pending_count": 0, "latest_pending_id": 0}))
+                self.assertEqual(request("/api/admin/questions", admin=True)[1]["items"], [])
+                completed, = request("/api/admin/questions?status=resolved", admin=True)[1]["items"]
+                self.assertEqual(completed["id"], created["id"])
+                self.assertIsNotNone(completed["resolved_at"])
                 status, result = request("/api/submit", body)
                 self.assertEqual((status, result["verdict"], result["passed"]), (200, "ACCEPTED", 3))
                 self.assertTrue(result["attention_saved"])
+                self.assertEqual(request("/api/admin/solve-statistics")[0], 401)
+                status, statistics = request("/api/admin/solve-statistics", admin=True)
+                self.assertEqual((status, statistics["total_students"]), (200, 1))
+                week = next(item for item in statistics["weeks"] if item["id"] == "week-1")
+                detail = next(item for item in week["problems"] if item["id"] == "sum-two")
+                self.assertEqual((week["solved"], detail["attempted"], detail["solved"]), (1, 1, 1))
                 self.assertEqual(storage.list_submissions()[0]["student_id"], "00123")
                 self.assertEqual(storage.list_submissions()[0]["entry_method"], "FULL_PASTE")
                 self.assertEqual(storage.get_submission(result["submission_id"])["code"], body["code"])
