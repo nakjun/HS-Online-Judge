@@ -11,7 +11,7 @@ TIMEOUT = 6
 OUTPUT_LIMIT = 64 * 1024
 
 
-def run_code(code: str, stdin: str) -> dict:
+def run_code(code: str, stdin: str, timeout: int = TIMEOUT) -> dict:
     name = "python-judge-" + uuid.uuid4().hex
     with tempfile.TemporaryDirectory(prefix="python-judge-") as directory:
         source = Path(directory) / "main.py"
@@ -58,7 +58,7 @@ def run_code(code: str, stdin: str) -> dict:
         writer.start()
         timed_out = False
         try:
-            process.wait(timeout=TIMEOUT)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             timed_out = True
         if timed_out or too_large.is_set():

@@ -1,4 +1,5 @@
 import hmac
+import re
 import ipaddress
 import base64
 import binascii
@@ -48,6 +49,12 @@ def short_text(value, label, limit):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise ValueError(f"{label}: 1~{limit}자 문자열을 입력하세요.")
     return value.strip()
+
+
+def output_matches(problem, actual, expected):
+    if problem.get("checker") == "sorting-benchmark-format":
+        return re.fullmatch(r"BUBBLE [0-9]+\.[0-9]{6}\nSELECTION [0-9]+\.[0-9]{6}\n?", actual) is not None
+    return actual.rstrip() == expected.rstrip()
 
 
 def test_case(value):
@@ -324,8 +331,11 @@ class Handler(BaseHTTPRequestHandler):
             cases = []
             verdict = "ACCEPTED"
             for test in problem["tests"]:
-                result = run_code(code, test["input"])
-                passed = result["status"] == "OK" and result["stdout"].rstrip() == test["output"].rstrip()
+                if problem.get("checker") == "sorting-benchmark-format":
+                    result = run_code(code, test["input"], timeout=60)
+                else:
+                    result = run_code(code, test["input"])
+                passed = result["status"] == "OK" and output_matches(problem, result["stdout"], test["output"])
                 cases.append({"passed": passed, "status": result["status"]})
                 if not passed:
                     verdict = "WRONG_ANSWER" if result["status"] == "OK" else result["status"]

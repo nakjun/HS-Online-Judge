@@ -89,6 +89,7 @@ button.progress-sort:hover { background: var(--hs-violet-soft); }
 .problem-section h3 { margin: 0 0 9px; font-size: 16px; line-height: 1.5; color: var(--hs-violet-dark); }
 .problem-section p { margin: 0 0 12px; color: var(--hs-ink); }
 .problem-prose { white-space: pre-line; overflow-wrap: anywhere; }
+.problem-code { white-space: pre; word-break: normal; overflow-wrap: normal; overflow-x: auto; tab-size: 4; font: 14px/1.7 Consolas, monospace; }
 .problem-section ul, .problem-section ol { margin: 0; padding-left: 24px; }
 .problem-section li { padding-left: 3px; margin: 5px 0; overflow-wrap: anywhere; }
 .problem-section code { padding: 1px 4px; border-radius: 4px; background: #f2eff6; font-size: .9em; font-family: Consolas, ui-monospace, monospace; overflow-wrap: anywhere; }

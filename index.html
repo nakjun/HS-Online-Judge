@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body><div class="brand-strip"><div class="brand-strip-inner"><span>HANSHIN UNIVERSITY</span><span>CLASSROOM CODE JUDGE</span></div></div><div class="wrap">
-  <header><div><span class="eyebrow">HANSHIN UNIVERSITY · CLASSROOM</span><h1>Python Judge</h1><p class="muted">주차별 문제를 풀고 제출 결과를 확인하세요.</p></div><a href="/admin">관리자</a></header>
+  <header><div><span class="eyebrow">HANSHIN UNIVERSITY · CLASSROOM</span><h1>Python Judge</h1><p class="muted">주차별 문제를 풀고 제출 결과를 확인하세요.</p></div></header>
   <section id="login-view" class="panel login-panel">
     <span class="eyebrow">STUDENT SIGN IN</span><h2>학생 로그인</h2>
     <p>엑셀 명단에 등록된 학번과 이름을 입력하세요.</p>
@@ -270,10 +270,19 @@ function renderStatement(problem){
   $('problem-title').textContent=problem.title;
   const root=$('description');root.replaceChildren();
   let section=problemSection(root,'문제');
-  for(const block of problem.description.split(/\n\s*\n/)){
+  const chunks=problem.description.split(/(```(?:python)?\r?\n[\s\S]*?```)/g);
+  for(const chunk of chunks){
+    if(chunk.startsWith('```')){
+      const pre=document.createElement('pre');pre.className='problem-code';
+      pre.textContent=chunk.replace(/^```(?:python)?\r?\n/,'').replace(/\r?\n?```$/,'');
+      section.append(pre);continue;
+    }
+    for(const block of chunk.trim().split(/\n\s*\n/)){
+    if(!block)continue;
     const named=block.match(/^(구현 조건|제출 안내|학습 목표|학습 포인트):\s*([\s\S]*)$/);
     if(named){section=problemSection(root,named[1]);appendProblemBody(section,named[2],named[1]!=='제출 안내')}
     else appendProblemBody(section,block);
+    }
   }
   const io=document.createElement('div');io.className='problem-io';root.append(io);
   appendProblemBody(problemSection(io,'입력'),problem.input,true);

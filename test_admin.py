@@ -10,6 +10,16 @@ import server
 
 
 class AdminApiTest(unittest.TestCase):
+    def test_benchmark_output_format(self):
+        problem = {"checker": "sorting-benchmark-format"}
+        self.assertTrue(server.output_matches(problem, "BUBBLE 0.123456\nSELECTION 1.000000\n", ""))
+        for output in ("BUBBLE nan\nSELECTION 0.000000\n", "BUBBLE -1.000000\nSELECTION 0.000000\n",
+                       "BUBBLE 0.12\nSELECTION 0.123456\n", "SELECTION 0.123456\nBUBBLE 0.123456\n",
+                       "BUBBLE 0.123456\nSELECTION 0.123456\nextra"):
+            self.assertFalse(server.output_matches(problem, output, ""))
+        self.assertTrue(server.output_matches({}, "1 2\n", "1 2"))
+        self.assertFalse(server.output_matches({}, "1 3", "1 2"))
+
     def test_create_week_and_problem_with_private_tests(self):
         with tempfile.TemporaryDirectory() as directory:
             old_weeks, old_problems = server.WEEKS_FILE, server.PROBLEMS_FILE
