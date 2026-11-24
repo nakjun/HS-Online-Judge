@@ -101,6 +101,7 @@ class StudentFlowTest(unittest.TestCase):
                 status, result = request("/api/submit", body)
                 self.assertEqual((status, result["verdict"], result["passed"]), (200, "ACCEPTED", 3))
                 self.assertTrue(result["attention_saved"])
+                self.assertEqual(result["pass_rank"], {"rank": 1, "total_students": 1, "first_pass": True})
                 self.assertEqual(request("/api/admin/solve-statistics")[0], 401)
                 status, statistics = request("/api/admin/solve-statistics", admin=True)
                 self.assertEqual((status, statistics["total_students"]), (200, 1))

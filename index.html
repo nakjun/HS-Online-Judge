@@ -15,8 +15,8 @@
     .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}pre{white-space:pre-wrap;word-break:break-word;background:#111620;border-radius:9px;padding:13px;min-height:50px;overflow:auto}
     .badge{display:inline-block;padding:5px 9px;border-radius:7px;background:#33425d;margin-bottom:8px}.good{background:#164d3a;color:#aaf2ce}.bad{background:#683239;color:#ffd0d3}
     .problem-list{display:grid;gap:7px;margin:12px 0}.problem-list button{width:100%;text-align:left;background:#293346;border:1px solid #42516a;padding:10px 12px}.problem-list button.selected{background:#354aa6;border-color:#7285ff}
-    #question-dialog{width:min(520px,calc(100% - 32px));margin:auto;border-color:var(--hs-border);color:var(--hs-ink)}
-    #question-dialog::backdrop{background:#10131a90}
+    #question-dialog,#pass-rank-dialog{width:min(520px,calc(100% - 32px));margin:auto;border-color:var(--hs-border);color:var(--hs-ink)}
+    #question-dialog::backdrop,#pass-rank-dialog::backdrop{background:#10131a90}
     #question-body{min-height:130px;font-family:inherit}
     @media(max-width:760px){.grid{grid-template-columns:1fr}.wrap{padding:20px 12px}}
   </style>
@@ -66,6 +66,11 @@ print(a + b)</textarea><p class="muted">Ctrl + # (Ctrl + Shift + 3): 현재 줄 
   </div>
   </div>
 </div>
+<dialog id="pass-rank-dialog" class="panel" aria-labelledby="pass-rank-title">
+  <h2 id="pass-rank-title">처음 통과했습니다!</h2>
+  <p id="pass-rank-message"></p>
+  <form method="dialog"><button class="primary">확인</button></form>
+</dialog>
 <script>
 const $ = id => document.getElementById(id);
 // Keep the native textarea for selection, IME, history and submission.
@@ -390,6 +395,11 @@ async function execute(mode){
     $('status').textContent=labels[verdict]||verdict;
     $('status').className='badge '+(['OK','ACCEPTED'].includes(verdict)?'good':'bad');
     $('detail').textContent=result.cases?`${result.passed} / ${result.total}개 테스트 통과 · 제출 #${result.submission_id} · 입력 방식: ${entryLabels[result.entry_method]||'확인 불가'}`:'';
+    if(mode==='submit'&&verdict==='ACCEPTED'&&result.pass_rank?.first_pass){
+      const {rank,total_students:total}=result.pass_rank;
+      $('pass-rank-message').textContent=`전체 ${total}명 중 ${rank}등으로 이 문제를 통과했습니다.`;
+      if(!$('pass-rank-dialog').open)$('pass-rank-dialog').showModal();
+    }
     if(mode==='submit')$('detail').textContent+=result.attention_saved===true?' · 화면 활동 저장됨':' · 화면 활동 저장을 확인하지 못했습니다. 서버 재시작 후 다시 제출하세요.';
     $('stdout').textContent=result.stdout||'';$('stderr').textContent=result.stderr||'';
     if(mode==='submit')await loadProblems();

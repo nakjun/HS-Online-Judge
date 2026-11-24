@@ -17,6 +17,7 @@ from storage import class_code_status, create_student_session, delete_student_se
 from storage import accepted_codes
 from storage import list_questions, pending_question_summary, resolve_question, save_question
 from storage import solve_statistics
+from storage import submission_pass_rank
 
 ROOT = Path(__file__).parent
 PROBLEMS_FILE = ROOT / "problems.json"
@@ -345,8 +346,10 @@ class Handler(BaseHTTPRequestHandler):
             submission_id = save_submission(student["student_id"], problem["id"], code, verdict, passed_count,
                                             len(problem["tests"]), entry, body.get("attention"))
             saved = get_submission(submission_id)
+            pass_rank = submission_pass_rank(student["student_id"], problem["id"], submission_id)
             return self.reply(200, {"submission_id": submission_id, "entry_method": saved["entry_method"],
                                     "attention_saved": saved["attention"] is not None,
+                                    "pass_rank": pass_rank,
                                     "verdict": verdict, "passed": passed_count,
                                     "total": len(problem["tests"]), "cases": cases})
         finally:

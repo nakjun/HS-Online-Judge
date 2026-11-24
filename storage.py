@@ -64,6 +64,8 @@ def init_db():
             resolved_at TEXT
         )""")
         db.execute("CREATE INDEX IF NOT EXISTS questions_queue ON questions (resolved_at, id)")
+        db.execute("""CREATE INDEX IF NOT EXISTS submissions_first_accept
+            ON submissions(problem_id, student_id, id) WHERE verdict = 'ACCEPTED'""")
         db.execute("""CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL,
@@ -319,6 +321,23 @@ def save_submission(student_id, problem_id, code, verdict, passed, total, entry=
                             (student_id, problem_id, code, verdict, passed, total, method, largest, pasted, typed,
                              json.dumps(observed, ensure_ascii=False) if observed is not None else None))
         return cursor.lastrowid
+
+
+def submission_pass_rank(student_id, problem_id, submission_id):
+    """Rank distinct students by their first accepted submission, up to this submission."""
+    with connect() as db:
+        db.execute("BEGIN")
+        total_students = db.execute("SELECT COUNT(*) FROM students").fetchone()[0]
+        first_id = db.execute("""SELECT MIN(id) FROM submissions
+            WHERE student_id = ? AND problem_id = ? AND verdict = 'ACCEPTED' AND id <= ?""",
+            (student_id, problem_id, submission_id)).fetchone()[0]
+        if first_id is None:
+            return {"rank": None, "total_students": total_students, "first_pass": False}
+        rank = db.execute("""SELECT COUNT(DISTINCT student_id) FROM submissions
+            WHERE problem_id = ? AND verdict = 'ACCEPTED' AND id <= ?""",
+            (problem_id, first_id)).fetchone()[0]
+        return {"rank": rank, "total_students": total_students,
+                "first_pass": first_id == submission_id}
 
 
 def save_question(student_id, problem_id, body):

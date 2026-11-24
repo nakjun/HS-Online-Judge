@@ -88,6 +88,27 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(old['distribution'], [104, 1])
         self.assertEqual((empty['completed'], empty['distribution']), (0, [105]))
 
+    def test_first_pass_rank_is_per_problem_and_stable_on_resubmission(self):
+        wrong = self.submit('000', 'a', 'WRONG_ANSWER')
+        self.assertEqual(storage.submission_pass_rank('000', 'a', wrong),
+                         {'rank': None, 'total_students': 105, 'first_pass': False})
+        first = self.submit('104', 'a')
+        self.submit('104', 'a')
+        second = self.submit('000', 'a')
+        self.submit('103', 'a')
+        self.assertEqual(storage.submission_pass_rank('104', 'a', first)['rank'], 1)
+        self.assertTrue(storage.submission_pass_rank('104', 'a', first)['first_pass'])
+        self.assertTrue(storage.submission_pass_rank('000', 'a', second)['first_pass'])
+        self.assertEqual(storage.submission_pass_rank('000', 'a', second)['rank'], 2)
+        repeat = self.submit('000', 'a', 'WRONG_ANSWER')
+        self.assertEqual(storage.submission_pass_rank('000', 'a', repeat)['rank'], 2)
+        self.assertFalse(storage.submission_pass_rank('000', 'a', repeat)['first_pass'])
+        accepted_repeat = self.submit('000', 'a')
+        self.assertFalse(storage.submission_pass_rank('000', 'a', accepted_repeat)['first_pass'])
+        self.assertIsNone(storage.submission_pass_rank('000', 'a', wrong)['rank'])
+        other = self.submit('000', 'b')
+        self.assertEqual(storage.submission_pass_rank('000', 'b', other)['rank'], 1)
+
     def test_accepted_source_preserved_and_scoped_to_student(self):
         source = '  # 공백과 줄바꿈\nprint("원문")\n\n'
         self.submit('000', 'a', code='old')
